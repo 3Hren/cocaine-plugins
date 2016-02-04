@@ -389,16 +389,15 @@ overseer_t::prototype() {
 }
 
 auto overseer_t::spawn(pool_type& pool) -> void {
+    // TODO: Better to log finished event (or errored).
     COCAINE_LOG_INFO(log, "enlarging the slaves pool to {}", pool.size() + 1);
-
-    slave_context ctx(context, manifest(), profile());
 
     // It is guaranteed that the cleanup handler will not be invoked from within the slave's
     // constructor.
-    const auto uuid = ctx.id;
+    const auto id = slave::id_t();
     pool.insert(std::make_pair(
-        uuid,
-        slave_t(std::move(ctx), *loop, std::bind(&overseer_t::on_slave_death, shared_from_this(), ph::_1, uuid))
+        id.get(),
+        slave_t(context, id, profile(), manifest(), *loop, std::bind(&overseer_t::on_slave_death, shared_from_this(), ph::_1, id.get()))
     ));
 
     ++stats.slaves.spawned;

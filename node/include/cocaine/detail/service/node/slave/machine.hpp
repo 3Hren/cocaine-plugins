@@ -23,6 +23,7 @@
 #include "cocaine/service/node/event.hpp"
 #include "cocaine/service/node/manifest.hpp"
 #include "cocaine/service/node/profile.hpp"
+#include "cocaine/service/node/slave/id.hpp"
 #include "cocaine/service/node/slave/error.hpp"
 #include "cocaine/service/node/slot.hpp"
 #include "cocaine/service/node/splitter.hpp"
@@ -68,6 +69,8 @@ class stats_t;
 }  // namespace cocaine
 
 namespace cocaine {
+
+using slave::id_t;
 // namespace detail {
 // namespace service {
 // namespace node {
@@ -100,7 +103,14 @@ public:
 private:
     const std::unique_ptr<logging::logger_t> log;
 
-    const slave_context context;
+public:
+    context_t& context;
+
+    const id_t id;
+    const profile_t profile;
+    const manifest_t manifest;
+
+private:
     // TODO: In current implementation this can be invalid, when engine is stopped.
     asio::io_service& loop;
 
@@ -128,11 +138,11 @@ private:
 
 public:
     /// Creates the state machine instance and immediately starts it.
-    static
-    std::shared_ptr<machine_t>
-    create(slave_context context, asio::io_service& loop, cleanup_handler cleanup);
+    static auto create(context_t& context, id_t id, profile_t profile, manifest_t manifest,
+        asio::io_service& loop, cleanup_handler cleanup) -> std::shared_ptr<machine_t>;
 
-    machine_t(lock_t, slave_context context, asio::io_service& loop, cleanup_handler cleanup);
+    machine_t(lock_t, context_t& context, id_t id, profile_t profile, manifest_t manifest,
+        asio::io_service& loop, cleanup_handler cleanup);
 
     ~machine_t();
 
@@ -146,9 +156,6 @@ public:
     load() const;
 
     auto stats() const -> slave::stats_t;
-
-    const profile_t&
-    profile() const;
 
     // Modifiers.
 

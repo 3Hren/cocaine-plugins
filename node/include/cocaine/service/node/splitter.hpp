@@ -4,6 +4,7 @@
 
 #include <boost/optional/optional.hpp>
 
+/// \todo: Move to details.
 class splitter_t {
 public:
     std::string unparsed;

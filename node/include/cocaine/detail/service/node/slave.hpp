@@ -59,20 +59,6 @@ using service::node::slave::stats_t;
 
 } // namespace slave
 
-struct slave_context {
-    context_t&  context;
-    manifest_t  manifest;
-    profile_t   profile;
-    std::string id;
-
-    slave_context(context_t& context, manifest_t manifest, profile_t profile) :
-        context(context),
-        manifest(manifest),
-        profile(profile),
-        id(unique_id_t().string())
-    {}
-};
-
 // TODO: Rename to `comrade`, because in Soviet Russia slave owns you!
 class slave_t {
 public:
@@ -95,7 +81,9 @@ private:
     std::shared_ptr<machine_t> machine;
 
 public:
-    slave_t(slave_context context, asio::io_service& loop, cleanup_handler fn);
+    slave_t(context_t& context, slave::id_t id, profile_t profile, manifest_t manifest,
+        asio::io_service& loop, cleanup_handler fn);
+
     slave_t(const slave_t& other) = delete;
     slave_t(slave_t&&) = default;
 

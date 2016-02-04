@@ -35,11 +35,13 @@ using namespace cocaine;
 
 using blackhole::attribute_list;
 
-slave_t::slave_t(slave_context context, asio::io_service& loop, cleanup_handler fn):
+slave_t::slave_t(context_t& context, id_t id, profile_t profile, manifest_t manifest,
+    asio::io_service& loop, cleanup_handler fn)
+    :
     ec(error::overseer_shutdowning),
-    machine(machine_t::create(context, loop, fn))
+    machine(machine_t::create(context, id, profile, manifest, loop, fn))
 {
-    data.id = context.id;
+    data.id = id.get();
     data.birthstamp = std::chrono::high_resolution_clock::now();
 }
 
@@ -80,9 +82,8 @@ slave_t::active() const noexcept {
     return machine->active();
 }
 
-profile_t
-slave_t::profile() const {
-    return machine->profile();
+auto slave_t::profile() const -> profile_t {
+    return machine->profile;
 }
 
 std::shared_ptr<control_t>

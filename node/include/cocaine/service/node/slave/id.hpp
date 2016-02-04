@@ -11,8 +11,8 @@ class id_t {
     std::string id;
 
 public:
+    explicit id_t();
     explicit id_t(std::string id);
-    static auto generate() -> id_t;
 
     auto get() const noexcept -> const std::string&;
 };

@@ -36,21 +36,27 @@ using namespace cocaine;
 
 using blackhole::attribute_list;
 
-std::shared_ptr<machine_t>
-machine_t::create(slave_context context, asio::io_service& loop, cleanup_handler cleanup) {
-    auto machine = std::make_shared<machine_t>(lock_t(), context, loop, cleanup);
+auto machine_t::create(context_t& context, id_t id, profile_t profile, manifest_t manifest,
+    asio::io_service& loop, cleanup_handler cleanup) -> std::shared_ptr<machine_t>
+{
+    auto machine = std::make_shared<machine_t>(lock_t{}, context, id, profile, manifest, loop, cleanup);
     machine->start();
 
     return machine;
 }
 
-machine_t::machine_t(lock_t, slave_context context, asio::io_service& loop, cleanup_handler cleanup):
-    log(context.context.log(format("%s/slave", context.manifest.name), {{ "uuid", context.id }})),
+machine_t::machine_t(lock_t, context_t& context, id_t id, profile_t profile, manifest_t manifest,
+    asio::io_service& loop, cleanup_handler cleanup)
+    :
+    log(context.log(format("%s/slave", manifest.name), {{ "uuid", id.get() }})),
     context(context),
+    id(id),
+    profile(profile),
+    manifest(manifest),
     loop(loop),
     closed(false),
     cleanup(std::move(cleanup)),
-    lines(context.profile.crashlog_limit),
+    lines(profile.crashlog_limit),
     shutdowned(false),
     counter{1}
 {
@@ -78,7 +84,7 @@ machine_t::start() {
     // the event loop.
     loop.post(trace_t::bind([=]() {
         // This call can perform state machine shutdowning on any error occurred.
-        spawning->spawn(context.profile.timeout.spawn);
+        spawning->spawn(profile.timeout.spawn);
     }));
 }
 
@@ -127,11 +133,6 @@ auto machine_t::stats() const -> slave::stats_t {
     });
 
     return result;
-}
-
-const profile_t&
-machine_t::profile() const {
-    return context.profile;
 }
 
 std::shared_ptr<control_t>
@@ -220,7 +221,7 @@ machine_t::output(const char* data, size_t size) {
     while (auto line = splitter.next()) {
         lines.push_back(*line);
 
-        if (context.profile.log_output) {
+        if (profile.log_output) {
             COCAINE_LOG_DEBUG(log, "slave's output: `{}`", *line);
         }
     }
@@ -340,11 +341,9 @@ machine_t::dump() {
         std::chrono::microseconds
     >(now).count();
 
-    const auto key = format("%lld:%s", us, context.id);
+    const auto key = format("%lld:%s", us, id.get());
 
-    std::vector<std::string> indexes {
-        context.manifest.name
-    };
+    std::vector<std::string> indexes{{manifest.name}};
 
     std::time_t time = std::time(nullptr);
     char buf[64];
@@ -356,7 +355,7 @@ machine_t::dump() {
                      key, boost::join(indexes, ", "));
 
     try {
-        api::storage(context.context, "core")->put("crashlogs", key, dump, indexes);
+        api::storage(context, "core")->put("crashlogs", key, dump, indexes);
     } catch (const std::system_error& err) {
         COCAINE_LOG_WARNING(log, "slave is unable to save the crashlog: {}", err.what());
     }

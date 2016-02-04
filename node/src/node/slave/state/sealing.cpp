@@ -59,7 +59,7 @@ sealing_t::terminate(const std::error_code& ec) {
 
     slave->migrate(terminating);
 
-    terminating->start(slave->context.profile.timeout.terminate, ec);
+    terminating->start(slave->profile.timeout.terminate, ec);
 }
 
 void

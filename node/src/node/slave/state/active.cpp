@@ -1,6 +1,5 @@
 #include "cocaine/detail/service/node/slave/state/active.hpp"
 
-#include "cocaine/detail/service/node/slave.hpp"
 #include "cocaine/detail/service/node/slave/machine.hpp"
 
 #include "cocaine/detail/service/node/slave/control.hpp"
@@ -58,7 +57,7 @@ active_t::seal() {
 
     slave->migrate(sealing);
 
-    sealing->start(slave->context.profile.timeout.seal);
+    sealing->start(slave->profile.timeout.seal);
 }
 
 void
@@ -69,5 +68,5 @@ active_t::terminate(const std::error_code& ec) {
 
     slave->migrate(terminating);
 
-    terminating->start(slave->context.profile.timeout.terminate, ec);
+    terminating->start(slave->profile.timeout.terminate, ec);
 }
