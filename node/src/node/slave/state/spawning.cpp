@@ -9,6 +9,7 @@
 #include <cocaine/rpc/actor.hpp>
 
 #include "cocaine/service/node/slave.hpp"
+#include "cocaine/detail/service/node/slave/machine.hpp"
 
 #include "cocaine/detail/service/node/slave/state/handshaking.hpp"
 #include "cocaine/detail/service/node/util.hpp"

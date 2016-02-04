@@ -3,6 +3,7 @@
 #include <blackhole/logger.hpp>
 
 #include "cocaine/service/node/slave.hpp"
+#include "cocaine/detail/service/node/slave/machine.hpp"
 
 #include "cocaine/detail/service/node/slave/control.hpp"
 #include "cocaine/detail/service/node/slave/fetcher.hpp"

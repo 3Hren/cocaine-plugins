@@ -8,6 +8,7 @@
 #include <cocaine/traits/tuple.hpp>
 
 #include "cocaine/service/node/slave.hpp"
+#include "cocaine/detail/service/node/slave/machine.hpp"
 
 namespace ph = std::placeholders;
 
