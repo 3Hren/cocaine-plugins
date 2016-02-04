@@ -9,6 +9,7 @@
 #include "cocaine/errors.hpp"
 #include "cocaine/idl/node.hpp"
 #include "cocaine/locked_ptr.hpp"
+#include "cocaine/logging.hpp"
 #include "cocaine/rpc/actor.hpp"
 #include "cocaine/rpc/actor_unix.hpp"
 #include "cocaine/traits/dynamic.hpp"

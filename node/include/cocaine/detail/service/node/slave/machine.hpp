@@ -18,7 +18,7 @@
 #include "cocaine/api/stream.hpp"
 #include "cocaine/idl/rpc.hpp"
 #include "cocaine/idl/node.hpp"
-#include "cocaine/service/node/slave.hpp"
+#include "cocaine/detail/service/node/slave.hpp"
 
 #include "cocaine/service/node/event.hpp"
 #include "cocaine/service/node/manifest.hpp"

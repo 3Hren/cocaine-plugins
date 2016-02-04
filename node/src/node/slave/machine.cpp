@@ -1,6 +1,6 @@
 #include "cocaine/detail/service/node/slave/machine.hpp"
 
-#include "cocaine/service/node/slave.hpp"
+#include "cocaine/detail/service/node/slave.hpp"
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/range/adaptor/map.hpp>

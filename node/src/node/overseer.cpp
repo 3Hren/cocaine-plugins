@@ -12,6 +12,7 @@
 
 #include "cocaine/service/node/manifest.hpp"
 #include "cocaine/service/node/profile.hpp"
+#include "cocaine/detail/service/node/slave.hpp"
 #include "cocaine/service/node/slave/id.hpp"
 #include "cocaine/service/node/slave/stats.hpp"
 #include "cocaine/service/node/slot.hpp"

@@ -10,8 +10,10 @@
 
 #include "cocaine/service/node/app/stats.hpp"
 #include "cocaine/service/node/event.hpp"
-#include "cocaine/service/node/slave.hpp"
+#include "cocaine/service/node/slave/channel.hpp"
 #include "cocaine/service/node/slot.hpp"
+#include "cocaine/service/node/manifest.hpp"
+#include "cocaine/service/node/profile.hpp"
 
 namespace cocaine {
 namespace service {
@@ -24,6 +26,15 @@ class id_t;
 }  // namespace node
 }  // namespace service
 }  // namespace cocaine
+
+namespace cocaine {
+namespace slave {
+struct channel_t;
+
+using cocaine::service::node::slave::id_t;
+
+}
+}
 
 namespace cocaine {
     class client_rpc_dispatch_t;
@@ -60,30 +71,13 @@ public:
         slave::channel_t channel;
         trace_t trace;
 
-        slave::channel_t&
-        operator*() {
-            return channel;
-        }
-
-        const slave::channel_t&
-        operator*() const {
-            return channel;
-        }
-
-        slave::channel_t*
-        operator->() {
-            return &channel;
-        }
-
-        const slave::channel_t*
-        operator->() const {
-            return &channel;
-        }
+        auto operator*() -> slave::channel_t& { return channel; }
+        auto operator*() const -> const slave::channel_t& { return channel; }
+        auto operator->() -> slave::channel_t* { return &channel; }
+        auto operator->() const -> const slave::channel_t* { return &channel; }
     };
 
-    typedef std::deque<
-        channel_wrapper_t
-    > queue_type;
+    typedef std::deque<channel_wrapper_t> queue_type;
 
 private:
     const std::unique_ptr<logging::logger_t> log;
