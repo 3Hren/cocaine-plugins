@@ -8,7 +8,7 @@
 
 using namespace cocaine;
 
-active_t::active_t(std::shared_ptr<state_machine_t> slave_,
+active_t::active_t(std::shared_ptr<machine_t> slave_,
                    std::unique_ptr<api::handle_t> handle_,
                    std::shared_ptr<session_t> session_,
                    std::shared_ptr<control_t> control_):

@@ -11,6 +11,7 @@
 
 #include "cocaine/service/node/manifest.hpp"
 #include "cocaine/service/node/profile.hpp"
+#include "cocaine/service/node/slave/stats.hpp"
 
 #include "cocaine/detail/service/node/slave/channel.hpp"
 #include "cocaine/detail/service/node/slave/control.hpp"
@@ -33,23 +34,15 @@ using namespace cocaine;
 
 using blackhole::attribute_list;
 
-slave::stats_t::stats_t():
-     tx{},
-     rx{},
-     load{},
-     total{},
-     age{boost::none}
-{}
-
-std::shared_ptr<state_machine_t>
-state_machine_t::create(slave_context context, asio::io_service& loop, cleanup_handler cleanup) {
-    auto machine = std::make_shared<state_machine_t>(lock_t(), context, loop, cleanup);
+std::shared_ptr<machine_t>
+machine_t::create(slave_context context, asio::io_service& loop, cleanup_handler cleanup) {
+    auto machine = std::make_shared<machine_t>(lock_t(), context, loop, cleanup);
     machine->start();
 
     return machine;
 }
 
-state_machine_t::state_machine_t(lock_t, slave_context context, asio::io_service& loop, cleanup_handler cleanup):
+machine_t::machine_t(lock_t, slave_context context, asio::io_service& loop, cleanup_handler cleanup):
     log(context.context.log(format("%s/slave", context.manifest.name), {{ "uuid", context.id }})),
     context(context),
     loop(loop),
@@ -62,12 +55,12 @@ state_machine_t::state_machine_t(lock_t, slave_context context, asio::io_service
     COCAINE_LOG_DEBUG(log, "slave state machine has been initialized");
 }
 
-state_machine_t::~state_machine_t() {
+machine_t::~machine_t() {
     COCAINE_LOG_DEBUG(log, "slave state machine has been destroyed");
 }
 
 void
-state_machine_t::start() {
+machine_t::start() {
     BOOST_ASSERT(*state.synchronize() == nullptr);
 
     COCAINE_LOG_DEBUG(log, "slave state machine is starting");
@@ -88,7 +81,7 @@ state_machine_t::start() {
 }
 
 bool
-state_machine_t::active() const noexcept {
+machine_t::active() const noexcept {
     auto state = *this->state.synchronize();
     BOOST_ASSERT(state);
 
@@ -96,12 +89,11 @@ state_machine_t::active() const noexcept {
 }
 
 std::uint64_t
-state_machine_t::load() const {
+machine_t::load() const {
     return data.channels->size();
 }
 
-slave::stats_t
-state_machine_t::stats() const {
+auto machine_t::stats() const -> slave::stats_t {
     slave::stats_t result;
 
     result.state = (*state.synchronize())->name();
@@ -136,12 +128,12 @@ state_machine_t::stats() const {
 }
 
 const profile_t&
-state_machine_t::profile() const {
+machine_t::profile() const {
     return context.profile;
 }
 
 std::shared_ptr<control_t>
-state_machine_t::activate(std::shared_ptr<session_t> session, upstream<io::worker::control_tag> stream) {
+machine_t::activate(std::shared_ptr<session_t> session, upstream<io::worker::control_tag> stream) {
     auto state = *this->state.synchronize();
     BOOST_ASSERT(state);
 
@@ -149,13 +141,13 @@ state_machine_t::activate(std::shared_ptr<session_t> session, upstream<io::worke
 }
 
 std::uint64_t
-state_machine_t::inject(slave::channel_t& data, channel_handler handler) {
+machine_t::inject(slave::channel_t& data, channel_handler handler) {
     const auto id = ++counter;
 
     auto channel = std::make_shared<channel_t>(
         id,
         data.event.birthstamp,
-        std::bind(&state_machine_t::revoke, shared_from_this(), id, handler)
+        std::bind(&machine_t::revoke, shared_from_this(), id, handler)
     );
 
     // W2C dispatch.
@@ -200,14 +192,14 @@ state_machine_t::inject(slave::channel_t& data, channel_handler handler) {
 }
 
 void
-state_machine_t::seal() {
+machine_t::seal() {
     auto state = *this->state.synchronize();
 
     state->seal();
 }
 
 void
-state_machine_t::terminate(std::error_code ec) {
+machine_t::terminate(std::error_code ec) {
     BOOST_ASSERT(ec);
 
     if (closed.exchange(true)) {
@@ -221,7 +213,7 @@ state_machine_t::terminate(std::error_code ec) {
 }
 
 void
-state_machine_t::output(const char* data, size_t size) {
+machine_t::output(const char* data, size_t size) {
     splitter.consume(std::string(data, size));
     while (auto line = splitter.next()) {
         lines.push_back(*line);
@@ -233,7 +225,7 @@ state_machine_t::output(const char* data, size_t size) {
 }
 
 void
-state_machine_t::migrate(std::shared_ptr<state_t> desired) {
+machine_t::migrate(std::shared_ptr<state_t> desired) {
     BOOST_ASSERT(desired);
 
     state.apply([=](std::shared_ptr<state_t>& state){
@@ -246,7 +238,7 @@ state_machine_t::migrate(std::shared_ptr<state_t> desired) {
 }
 
 void
-state_machine_t::shutdown(std::error_code ec) {
+machine_t::shutdown(std::error_code ec) {
     if (shutdowned.exchange(true)) {
         return;
     }
@@ -304,7 +296,7 @@ state_machine_t::shutdown(std::error_code ec) {
 }
 
 void
-state_machine_t::revoke(std::uint64_t id, channel_handler handler) {
+machine_t::revoke(std::uint64_t id, channel_handler handler) {
     const auto load = data.channels.apply([&](channels_map_t& channels) -> std::uint64_t {
         channels.erase(id);
         return channels.size();
@@ -327,7 +319,7 @@ state_machine_t::revoke(std::uint64_t id, channel_handler handler) {
 }
 
 void
-state_machine_t::dump() {
+machine_t::dump() {
     if (lines.empty() && splitter.unparsed.empty()) {
         COCAINE_LOG_WARNING(log, "slave has died in silence");
         return;
@@ -370,7 +362,7 @@ state_machine_t::dump() {
 
 slave_t::slave_t(slave_context context, asio::io_service& loop, cleanup_handler fn):
     ec(error::overseer_shutdowning),
-    machine(state_machine_t::create(context, loop, fn))
+    machine(machine_t::create(context, loop, fn))
 {
     data.id = context.id;
     data.birthstamp = std::chrono::high_resolution_clock::now();
@@ -402,8 +394,7 @@ slave_t::load() const {
     return machine->load();
 }
 
-slave::stats_t
-slave_t::stats() const {
+auto slave_t::stats() const -> slave::stats_t{
     return machine->stats();
 }
 
@@ -427,7 +418,7 @@ slave_t::activate(std::shared_ptr<session_t> session, upstream<io::worker::contr
 }
 
 std::uint64_t
-slave_t::inject(slave::channel_t& channel, state_machine_t::channel_handler handler) {
+slave_t::inject(slave::channel_t& channel, machine_t::channel_handler handler) {
     BOOST_ASSERT(machine);
 
     return machine->inject(channel, handler);

@@ -9,7 +9,7 @@
 
 namespace cocaine {
 
-class state_machine_t;
+class machine_t;
 
 /// The slave's output fetcher.
 ///
@@ -18,7 +18,7 @@ class state_machine_t;
 class fetcher_t:
     public std::enable_shared_from_this<fetcher_t>
 {
-    std::shared_ptr<state_machine_t> slave;
+    std::shared_ptr<machine_t> slave;
 
     std::array<char, 4096> buffer;
 
@@ -27,7 +27,7 @@ class fetcher_t:
 
 public:
     explicit
-    fetcher_t(std::shared_ptr<state_machine_t> slave);
+    fetcher_t(std::shared_ptr<machine_t> slave);
 
     /// Assigns an existing native descriptor to the output watcher and starts watching over it.
     ///

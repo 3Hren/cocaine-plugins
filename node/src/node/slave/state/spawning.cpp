@@ -19,7 +19,7 @@ using namespace cocaine;
 
 using asio::ip::tcp;
 
-spawning_t::spawning_t(std::shared_ptr<state_machine_t> slave_) :
+spawning_t::spawning_t(std::shared_ptr<machine_t> slave_) :
     slave(std::move(slave_)),
     timer(slave->loop)
 {}

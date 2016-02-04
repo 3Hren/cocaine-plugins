@@ -12,6 +12,8 @@
 
 #include "cocaine/service/node/manifest.hpp"
 #include "cocaine/service/node/profile.hpp"
+#include "cocaine/service/node/slave/id.hpp"
+#include "cocaine/service/node/slave/stats.hpp"
 #include "cocaine/service/node/slot.hpp"
 
 #include "cocaine/detail/service/node/dispatch/client.hpp"
@@ -341,7 +343,7 @@ struct rx_stream_t : public api::stream_t {
 std::shared_ptr<client_rpc_dispatch_t>
 overseer_t::enqueue(io::streaming_slot<io::app::enqueue>::upstream_type downstream,
                     app::event_t event,
-                    boost::optional<service::node::slave::id_t> id)
+                    boost::optional<slave::id_t> id)
 {
     std::shared_ptr<api::stream_t> rx = std::make_shared<rx_stream_t>(std::move(downstream));
     auto tx = enqueue(rx, std::move(event), std::move(id));
@@ -350,7 +352,7 @@ overseer_t::enqueue(io::streaming_slot<io::app::enqueue>::upstream_type downstre
 
 auto overseer_t::enqueue(std::shared_ptr<api::stream_t> rx,
     app::event_t event,
-    boost::optional<service::node::slave::id_t> /*id*/) -> std::shared_ptr<api::stream_t>
+    boost::optional<slave::id_t> id) -> std::shared_ptr<api::stream_t>
 {
     auto tx = std::make_shared<tx_stream_t>();
 
@@ -385,8 +387,7 @@ overseer_t::prototype() {
     );
 }
 
-void
-overseer_t::spawn(pool_type& pool) {
+auto overseer_t::spawn(pool_type& pool) -> void {
     COCAINE_LOG_INFO(log, "enlarging the slaves pool to {}", pool.size() + 1);
 
     slave_context ctx(context, manifest(), profile());

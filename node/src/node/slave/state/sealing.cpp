@@ -10,7 +10,7 @@ namespace ph = std::placeholders;
 
 using namespace cocaine::service::node::slave::state;
 
-sealing_t::sealing_t(std::shared_ptr<cocaine::state_machine_t> slave_,
+sealing_t::sealing_t(std::shared_ptr<cocaine::machine_t> slave_,
                      std::unique_ptr<cocaine::api::handle_t> handle_,
                      std::shared_ptr<cocaine::control_t> control_,
                      std::shared_ptr<cocaine::session_t> session_):

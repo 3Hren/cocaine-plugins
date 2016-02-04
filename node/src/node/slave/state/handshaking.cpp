@@ -12,7 +12,7 @@ namespace ph = std::placeholders;
 
 using namespace cocaine;
 
-handshaking_t::handshaking_t(std::shared_ptr<state_machine_t> slave_, std::unique_ptr<api::handle_t> handle_):
+handshaking_t::handshaking_t(std::shared_ptr<machine_t> slave_, std::unique_ptr<api::handle_t> handle_):
     slave(std::move(slave_)),
     timer(slave->loop),
     handle(std::move(handle_)),

@@ -10,13 +10,13 @@ namespace api {
     struct handle_t;
 } // namespace api
 
-class state_machine_t;
+class machine_t;
 
 class terminating_t:
     public state_t,
     public std::enable_shared_from_this<terminating_t>
 {
-    std::shared_ptr<state_machine_t> slave;
+    std::shared_ptr<machine_t> slave;
     std::unique_ptr<api::handle_t> handle;
     std::shared_ptr<control_t> control;
     std::shared_ptr<session_t> session;
@@ -24,7 +24,7 @@ class terminating_t:
     asio::deadline_timer timer;
 
 public:
-    terminating_t(std::shared_ptr<state_machine_t> slave,
+    terminating_t(std::shared_ptr<machine_t> slave,
                   std::unique_ptr<api::handle_t> handle,
                   std::shared_ptr<control_t> control,
                   std::shared_ptr<session_t> session);

@@ -13,7 +13,7 @@ namespace ph = std::placeholders;
 
 using namespace cocaine;
 
-control_t::control_t(std::shared_ptr<state_machine_t> slave_, upstream<io::worker::control_tag> stream_):
+control_t::control_t(std::shared_ptr<machine_t> slave_, upstream<io::worker::control_tag> stream_):
     dispatch<io::worker::control_tag>(format("%s/control", slave_->context.manifest.name)),
     slave(std::move(slave_)),
     stream(std::move(stream_)),

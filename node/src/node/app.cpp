@@ -16,6 +16,7 @@
 #include "cocaine/service/node/manifest.hpp"
 #include "cocaine/service/node/overseer.hpp"
 #include "cocaine/service/node/profile.hpp"
+#include "cocaine/service/node/slave/id.hpp"
 
 #include "cocaine/detail/service/node/dispatch/client.hpp"
 #include "cocaine/detail/service/node/dispatch/handshake.hpp"

@@ -14,6 +14,18 @@
 #include "cocaine/service/node/slot.hpp"
 
 namespace cocaine {
+namespace service {
+namespace node {
+namespace slave {
+
+class id_t;
+
+}  // namespace slave
+}  // namespace node
+}  // namespace service
+}  // namespace cocaine
+
+namespace cocaine {
     class client_rpc_dispatch_t;
     class control_t;
     class slave_t;
@@ -142,7 +154,7 @@ public:
     std::shared_ptr<client_rpc_dispatch_t>
     enqueue(io::streaming_slot<io::app::enqueue>::upstream_type downstream,
             app::event_t event,
-            boost::optional<service::node::slave::id_t> id);
+            boost::optional<slave::id_t> id);
 
     /// Enqueues the new event into the most appropriate slave.
     ///
@@ -156,7 +168,7 @@ public:
     /// \return a tx stream.
     auto enqueue(std::shared_ptr<api::stream_t> rx,
         app::event_t event,
-        boost::optional<service::node::slave::id_t> id) -> std::shared_ptr<api::stream_t>;
+        boost::optional<slave::id_t> id) -> std::shared_ptr<api::stream_t>;
 
     /// Tries to keep alive at least `count` workers no matter what.
     ///

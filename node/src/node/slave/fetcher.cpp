@@ -8,7 +8,7 @@ namespace ph = std::placeholders;
 
 using namespace cocaine;
 
-fetcher_t::fetcher_t(std::shared_ptr<state_machine_t> slave_):
+fetcher_t::fetcher_t(std::shared_ptr<machine_t> slave_):
     slave(std::move(slave_)),
     watcher(slave->loop)
 {}

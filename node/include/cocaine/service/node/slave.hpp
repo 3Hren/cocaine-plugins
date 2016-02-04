@@ -28,6 +28,25 @@
 
 namespace cocaine {
 
+class overseer_t;
+
+}  // namespace cocaine
+
+namespace cocaine {
+namespace service {
+namespace node {
+namespace slave {
+
+class id_t;
+class stats_t;
+
+}  // namespace slave
+}  // namespace node
+}  // namespace service
+}  // namespace cocaine
+
+namespace cocaine {
+
 class client_rpc_dispatch_t;
 
 class active_t;
@@ -50,27 +69,10 @@ typedef std::shared_ptr<
     const dispatch<io::event_traits<io::worker::rpc::invoke>::dispatch_type>
 > inject_dispatch_ptr_t;
 
-typedef std::function<void()> close_callback;
-
-namespace service { namespace node { namespace slave {
-
-struct id_t {
-    const std::string id;
-
-    id_t(std::string id):
-        id(std::move(id))
-    {}
-
-    static
-    id_t
-    generate() {
-        return id_t(unique_id_t().string());
-    }
-};
-
-}}}
-
 namespace slave {
+
+using service::node::slave::id_t;
+using service::node::slave::stats_t;
 
 struct channel_t {
     /// Event to be processed.
@@ -80,20 +82,6 @@ struct channel_t {
 
     /// An RX stream provided from user. The slave will call its callbacks on every incoming event.
     std::shared_ptr<api::stream_t> downstream;
-};
-
-struct stats_t {
-    /// Current state name.
-    std::string state;
-
-    std::uint64_t tx;
-    std::uint64_t rx;
-    std::uint64_t load;
-    std::uint64_t total;
-
-    boost::optional<std::chrono::high_resolution_clock::time_point> age;
-
-    stats_t();
 };
 
 } // namespace slave
@@ -113,8 +101,8 @@ struct slave_context {
 };
 
 /// Actual slave implementation.
-class state_machine_t:
-    public std::enable_shared_from_this<state_machine_t>
+class machine_t:
+    public std::enable_shared_from_this<machine_t>
 {
     friend class active_t;
     friend class stopped_t;
@@ -155,6 +143,8 @@ private:
 
     synchronized<std::shared_ptr<state_t>> state;
 
+    synchronized<std::deque<std::tuple<slave::channel_t, channel_handler>>> queue;
+
     std::atomic<std::uint64_t> counter;
 
     typedef std::unordered_map<std::uint64_t, std::shared_ptr<channel_t>> channels_map_t;
@@ -166,12 +156,12 @@ private:
 public:
     /// Creates the state machine instance and immediately starts it.
     static
-    std::shared_ptr<state_machine_t>
+    std::shared_ptr<machine_t>
     create(slave_context context, asio::io_service& loop, cleanup_handler cleanup);
 
-    state_machine_t(lock_t, slave_context context, asio::io_service& loop, cleanup_handler cleanup);
+    machine_t(lock_t, slave_context context, asio::io_service& loop, cleanup_handler cleanup);
 
-    ~state_machine_t();
+    ~machine_t();
 
     // Observers.
 
@@ -182,8 +172,7 @@ public:
     std::uint64_t
     load() const;
 
-    slave::stats_t
-    stats() const;
+    auto stats() const -> slave::stats_t;
 
     const profile_t&
     profile() const;
@@ -235,7 +224,7 @@ private:
 // TODO: Rename to `comrade`, because in Soviet Russia slave owns you!
 class slave_t {
 public:
-    typedef state_machine_t::cleanup_handler cleanup_handler;
+    typedef machine_t::cleanup_handler cleanup_handler;
 
 private:
     /// Termination reason.
@@ -247,7 +236,7 @@ private:
     } data;
 
     /// The slave state machine implementation.
-    std::shared_ptr<state_machine_t> machine;
+    std::shared_ptr<machine_t> machine;
 
 public:
     slave_t(slave_context context, asio::io_service& loop, cleanup_handler fn);
@@ -270,8 +259,7 @@ public:
     std::uint64_t
     load() const;
 
-    slave::stats_t
-    stats() const;
+    auto stats() const -> slave::stats_t;
 
     bool
     active() const noexcept;
@@ -286,7 +274,7 @@ public:
     activate(std::shared_ptr<session_t> session, upstream<io::worker::control_tag> stream);
 
     std::uint64_t
-    inject(slave::channel_t& channel, state_machine_t::channel_handler handler);
+    inject(slave::channel_t& channel, machine_t::channel_handler handler);
 
     void
     seal();
