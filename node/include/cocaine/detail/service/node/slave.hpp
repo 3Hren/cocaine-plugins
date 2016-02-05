@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <memory>
 #include <functional>
 #include <string>
 #include <system_error>
@@ -64,8 +65,7 @@ public:
     // TODO: Replace with something like `engine->rebalance_events()`.
     typedef std::function<void(std::uint64_t)> channel_handler;
 
-    // TODO: Replace with `engine->erase(id, reason, std::nothrow_t)`.
-    typedef std::function<void(const std::error_code&)> cleanup_handler;
+    typedef std::function<auto(const std::error_code& reason) noexcept -> void> observer_type;
 
 private:
     /// Construction time point.
@@ -76,8 +76,16 @@ private:
     std::shared_ptr<machine_t> machine;
 
 public:
+    /// Constructs a slave with the given settings and immediately starts it.
+    ///
+    /// \param context cocaine context.
+    /// \param id a slave identifier.
+    /// \param profile application profile with deployment and control specific settings.
+    /// \param manifest application manifest with execution specific settings.
+    /// \param loop event loop.
+    /// \param observer callback, that will be called exactly once at slave inner state destruction.
     slave_t(context_t& context, slave::id_t id, profile_t profile, manifest_t manifest,
-        asio::io_service& loop, cleanup_handler fn);
+        asio::io_service& loop, observer_type observer);
 
     slave_t(const slave_t& other) = delete;
     slave_t(slave_t&& other) = default;

@@ -13,11 +13,11 @@ namespace node {
 using blackhole::attribute_list;
 
 slave_t::slave_t(context_t& context, id_t id, profile_t profile, manifest_t manifest,
-    asio::io_service& loop, cleanup_handler fn)
+    asio::io_service& loop, observer_type observer)
     :
     birthstamp(std::chrono::high_resolution_clock::now()),
     reason(error::overseer_shutdowning),
-    machine(machine_t::create(context, id, profile, manifest, loop, fn))
+    machine(machine_t::create(context, id, profile, manifest, loop, observer))
 {}
 
 slave_t::~slave_t() {

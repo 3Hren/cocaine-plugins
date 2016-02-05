@@ -13,15 +13,15 @@
 
 #include "cocaine/service/node/manifest.hpp"
 #include "cocaine/service/node/profile.hpp"
-#include "cocaine/detail/service/node/slave.hpp"
-#include "cocaine/service/node/slave/id.hpp"
 #include "cocaine/service/node/slave/error.hpp"
+#include "cocaine/service/node/slave/id.hpp"
 #include "cocaine/service/node/slave/stats.hpp"
 #include "cocaine/service/node/slot.hpp"
 
 #include "cocaine/detail/service/node/dispatch/client.hpp"
 #include "cocaine/detail/service/node/dispatch/handshake.hpp"
 #include "cocaine/detail/service/node/dispatch/worker.hpp"
+#include "cocaine/detail/service/node/slave.hpp"
 #include "cocaine/detail/service/node/slave/control.hpp"
 
 #include <boost/accumulators/statistics/extended_p_square.hpp>
