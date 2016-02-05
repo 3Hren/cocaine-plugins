@@ -124,14 +124,11 @@ auto node_t::start_app(const std::string& name, const std::string& profile) -> d
 
     cocaine::deferred<void> deferred;
 
-    apps.apply([&](std::map<std::string, std::shared_ptr<node::app_t>>& apps) {
+    apps.apply([&](apps_t& apps) {
         auto it = apps.find(name);
 
         if (it != apps.end()) {
-            const auto info = it->second->info(io::node::info::brief).as_object();
-            throw std::system_error(
-                error::already_started,
-                cocaine::format("app '%s' is %s", name, info["state"].as_string()));
+            throw std::system_error(error::already_started);
         }
 
         apps.insert({name, std::make_shared<node::app_t>(context, name, profile, deferred)});
@@ -143,7 +140,7 @@ auto node_t::start_app(const std::string& name, const std::string& profile) -> d
 auto node_t::pause_app(const std::string& name) -> void {
     COCAINE_LOG_DEBUG(log, "processing `pause_app` request, app: '{}'", name);
 
-    apps.apply([&](std::map<std::string, std::shared_ptr<node::app_t>>& apps) {
+    apps.apply([&](apps_t& apps) {
         auto it = apps.find(name);
 
         if (it == apps.end()) {
