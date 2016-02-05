@@ -38,6 +38,7 @@ add_library(node SHARED
     src/node/slave.cpp
     src/node/slave/channel.cpp
     src/node/slave/machine
+    src/node/engine
     src/node/slave/stats
     src/node/slave/control.cpp
     src/node/slave/error.cpp
