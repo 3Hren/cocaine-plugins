@@ -1,31 +1,14 @@
 #include "cocaine/service/node/overseer.hpp"
 
-#include <boost/range/adaptors.hpp>
-#include <boost/range/algorithm.hpp>
-
 #include <blackhole/logger.hpp>
-#include <blackhole/scope/holder.hpp>
 
 #include <cocaine/context.hpp>
 #include <cocaine/logging.hpp>
 
-#include "cocaine/api/stream.hpp"
-
-#include "cocaine/service/node/manifest.hpp"
-#include "cocaine/service/node/profile.hpp"
-#include "cocaine/service/node/slave/error.hpp"
 #include "cocaine/service/node/slave/id.hpp"
-#include "cocaine/service/node/slave/stats.hpp"
-#include "cocaine/service/node/slot.hpp"
 
 #include "cocaine/detail/service/node/engine.hpp"
-#include "cocaine/detail/service/node/dispatch/client.hpp"
-#include "cocaine/detail/service/node/dispatch/handshake.hpp"
-#include "cocaine/detail/service/node/dispatch/worker.hpp"
 #include "cocaine/detail/service/node/slave.hpp"
-#include "cocaine/detail/service/node/slave/control.hpp"
-
-#include <boost/accumulators/statistics/extended_p_square.hpp>
 
 namespace cocaine {
 
@@ -61,18 +44,16 @@ auto overseer_t::keep_alive(int count) -> void {
     return engine->keep(count);
 }
 
-std::shared_ptr<client_rpc_dispatch_t>
-overseer_t::enqueue(io::streaming_slot<io::app::enqueue>::upstream_type downstream,
-                    app::event_t event,
-                    boost::optional<slave::id_t> id)
+auto overseer_t::enqueue(io::streaming_slot<io::app::enqueue>::upstream_type downstream,
+                         app::event_t event, boost::optional<slave::id_t> id)
+    -> std::shared_ptr<client_rpc_dispatch_t>
 {
     return engine->enqueue(downstream, event, id);
 }
 
-auto overseer_t::enqueue(std::shared_ptr<api::stream_t> rx,
-    app::event_t event,
-    boost::optional<slave::id_t> id) -> std::shared_ptr<api::stream_t>
-{
+auto overseer_t::enqueue(std::shared_ptr<api::stream_t> rx, app::event_t event,
+                         boost::optional<slave::id_t> id) -> std::shared_ptr<api::stream_t>
+ {
     return engine->enqueue(rx, event, id);
 }
 
