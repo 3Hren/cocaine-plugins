@@ -14,6 +14,7 @@
 #include "cocaine/service/node/manifest.hpp"
 #include "cocaine/service/node/profile.hpp"
 #include "cocaine/service/node/slave/stats.hpp"
+#include "cocaine/service/node/slave/channel.hpp"
 
 #include "cocaine/detail/service/node/slave/channel.hpp"
 #include "cocaine/detail/service/node/slave/control.hpp"

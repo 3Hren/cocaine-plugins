@@ -1,37 +1,33 @@
 #pragma once
 
+#include <chrono>
 #include <functional>
 #include <string>
 #include <system_error>
 
-#include <boost/circular_buffer.hpp>
-#include <boost/variant/variant.hpp>
+#include <cocaine/forwards.hpp>
 
-#include <asio/io_service.hpp>
-#include <asio/deadline_timer.hpp>
-#include <asio/posix/stream_descriptor.hpp>
-
-#include <cocaine/logging.hpp>
-#include <cocaine/unique_id.hpp>
-
-#include "cocaine/api/isolate.hpp"
-#include "cocaine/api/stream.hpp"
 #include "cocaine/idl/rpc.hpp"
-#include "cocaine/idl/node.hpp"
-
-#include "cocaine/service/node/event.hpp"
-#include "cocaine/service/node/manifest.hpp"
-#include "cocaine/service/node/profile.hpp"
-#include "cocaine/service/node/slave/error.hpp"
-#include "cocaine/service/node/slot.hpp"
-#include "cocaine/service/node/slave/channel.hpp"
 
 namespace cocaine {
 
+class control_t;
 class machine_t;
 class overseer_t;
+class session_t;
+
+struct profile_t;
+struct manifest_t;
 
 }  // namespace cocaine
+
+namespace cocaine {
+namespace app {
+
+class event_t;
+
+}
+}
 
 namespace cocaine {
 namespace service {
@@ -47,17 +43,20 @@ class stats_t;
 }  // namespace cocaine
 
 namespace cocaine {
-
-class client_rpc_dispatch_t;
-
-class control_t;
-
 namespace slave {
 
 using service::node::slave::id_t;
 using service::node::slave::stats_t;
 
-} // namespace slave
+struct channel_t;
+
+}  // namespace slave
+}  // namespace cocaine
+
+namespace cocaine {
+namespace detail {
+namespace service {
+namespace node {
 
 // TODO: Rename to `comrade`, because in Soviet Russia slave owns you!
 class slave_t {
@@ -85,12 +84,12 @@ public:
         asio::io_service& loop, cleanup_handler fn);
 
     slave_t(const slave_t& other) = delete;
-    slave_t(slave_t&&) = default;
+    slave_t(slave_t&& other) = default;
 
     ~slave_t();
 
-    slave_t& operator=(const slave_t& other) = delete;
-    slave_t& operator=(slave_t&&) = default;
+    auto operator=(const slave_t& other) -> slave_t& = delete;
+    auto operator=(slave_t&& other) -> slave_t& = default;
 
     // Observers.
 
@@ -130,4 +129,7 @@ public:
     terminate(std::error_code ec);
 };
 
-} // namespace cocaine
+}  // namespace node
+}  // namespace service
+}  // namespace detail
+}  // namespace cocaine

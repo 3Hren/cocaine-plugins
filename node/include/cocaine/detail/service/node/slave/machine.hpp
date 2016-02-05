@@ -126,8 +126,6 @@ private:
 
     synchronized<std::shared_ptr<state_t>> state;
 
-    synchronized<std::deque<std::tuple<slave::channel_t, channel_handler>>> queue;
-
     std::atomic<std::uint64_t> counter;
 
     typedef std::unordered_map<std::uint64_t, std::shared_ptr<channel_t>> channels_map_t;

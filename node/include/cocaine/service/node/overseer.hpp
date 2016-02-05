@@ -28,6 +28,18 @@ class id_t;
 }  // namespace cocaine
 
 namespace cocaine {
+namespace detail {
+namespace service {
+namespace node {
+
+class slave_t;
+
+}  // namespace node
+}  // namespace service
+}  // namespace detail
+}  // namespace cocaine
+
+namespace cocaine {
 namespace slave {
 struct channel_t;
 
@@ -39,7 +51,6 @@ using cocaine::service::node::slave::id_t;
 namespace cocaine {
     class client_rpc_dispatch_t;
     class control_t;
-    class slave_t;
     class unix_actor_t;
 }  // namespace cocaine
 
@@ -52,6 +63,8 @@ class stream_t;
 }  // namespace cocaine
 
 namespace cocaine {
+
+using detail::service::node::slave_t;
 
 class overseer_t:
     public std::enable_shared_from_this<overseer_t>

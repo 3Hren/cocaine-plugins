@@ -7,6 +7,7 @@
 #include <blackhole/scope/holder.hpp>
 
 #include <cocaine/context.hpp>
+#include <cocaine/logging.hpp>
 
 #include "cocaine/api/stream.hpp"
 
@@ -14,6 +15,7 @@
 #include "cocaine/service/node/profile.hpp"
 #include "cocaine/detail/service/node/slave.hpp"
 #include "cocaine/service/node/slave/id.hpp"
+#include "cocaine/service/node/slave/error.hpp"
 #include "cocaine/service/node/slave/stats.hpp"
 #include "cocaine/service/node/slot.hpp"
 

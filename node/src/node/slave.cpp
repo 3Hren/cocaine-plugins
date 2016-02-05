@@ -1,37 +1,14 @@
 #include "cocaine/detail/service/node/slave.hpp"
 
-#include <boost/algorithm/string/join.hpp>
-#include <boost/range/adaptor/map.hpp>
-#include <boost/range/algorithm/min_element.hpp>
-
-#include <cocaine/context.hpp>
-#include <cocaine/rpc/actor.hpp>
-
-#include "cocaine/api/isolate.hpp"
-
-#include "cocaine/service/node/manifest.hpp"
-#include "cocaine/service/node/profile.hpp"
+#include "cocaine/service/node/slave/channel.hpp"
 #include "cocaine/service/node/slave/stats.hpp"
 
 #include "cocaine/detail/service/node/slave/machine.hpp"
-#include "cocaine/detail/service/node/slave/channel.hpp"
-#include "cocaine/detail/service/node/slave/control.hpp"
-#include "cocaine/detail/service/node/slave/fetcher.hpp"
-#include "cocaine/detail/service/node/slave/state/active.hpp"
-#include "cocaine/detail/service/node/slave/state/stopped.hpp"
-#include "cocaine/detail/service/node/slave/state/handshaking.hpp"
-#include "cocaine/detail/service/node/slave/state/spawning.hpp"
-#include "cocaine/detail/service/node/slave/state/state.hpp"
-#include "cocaine/detail/service/node/slave/state/terminating.hpp"
-#include "cocaine/detail/service/node/dispatch/client.hpp"
-#include "cocaine/detail/service/node/dispatch/worker.hpp"
-#include "cocaine/detail/service/node/util.hpp"
 
-#include <blackhole/logger.hpp>
-
-namespace ph = std::placeholders;
-
-using namespace cocaine;
+namespace cocaine {
+namespace detail {
+namespace service {
+namespace node {
 
 using blackhole::attribute_list;
 
@@ -109,3 +86,8 @@ void
 slave_t::terminate(std::error_code ec) {
     this->ec = std::move(ec);
 }
+
+}  // namespace node
+}  // namespace service
+}  // namespace detail
+}  // namespace cocaine

@@ -2,6 +2,8 @@
 
 #include <memory>
 
+#include "cocaine/service/node/event.hpp"
+
 namespace cocaine {
 
 class client_rpc_dispatch_t;

@@ -3,6 +3,7 @@
 #include <cocaine/rpc/slot.hpp>
 
 #include <boost/mpl/copy.hpp>
+#include <boost/optional/optional.hpp>
 
 namespace cocaine { namespace io {
 
