@@ -15,48 +15,40 @@ using blackhole::attribute_list;
 slave_t::slave_t(context_t& context, id_t id, profile_t profile, manifest_t manifest,
     asio::io_service& loop, cleanup_handler fn)
     :
-    ec(error::overseer_shutdowning),
+    birthstamp(std::chrono::high_resolution_clock::now()),
+    reason(error::overseer_shutdowning),
     machine(machine_t::create(context, id, profile, manifest, loop, fn))
-{
-    data.id = id.get();
-    data.birthstamp = std::chrono::high_resolution_clock::now();
-}
+{}
 
 slave_t::~slave_t() {
     // This condition is required, because the class itself is movable.
     if (machine) {
-        machine->terminate(std::move(ec));
+        machine->terminate(std::move(reason));
     }
 }
 
-const std::string&
-slave_t::id() const noexcept {
-    return data.id;
+auto slave_t::id() const noexcept -> const std::string& {
+    return machine->id.get();
+}
+
+auto slave_t::active() const noexcept -> bool {
+    return machine->active();
 }
 
 long long
 slave_t::uptime() const {
     return std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::high_resolution_clock::now() - data.birthstamp
+        std::chrono::high_resolution_clock::now() - birthstamp
     ).count();
 }
 
 std::uint64_t
 slave_t::load() const {
-    BOOST_ASSERT(machine);
-
     return machine->load();
 }
 
 auto slave_t::stats() const -> slave::stats_t{
     return machine->stats();
-}
-
-bool
-slave_t::active() const noexcept {
-    BOOST_ASSERT(machine);
-
-    return machine->active();
 }
 
 auto slave_t::profile() const -> profile_t {
@@ -65,15 +57,11 @@ auto slave_t::profile() const -> profile_t {
 
 std::shared_ptr<control_t>
 slave_t::activate(std::shared_ptr<session_t> session, upstream<io::worker::control_tag> stream) {
-    BOOST_ASSERT(machine);
-
     return machine->activate(std::move(session), std::move(stream));
 }
 
 std::uint64_t
 slave_t::inject(slave::channel_t& channel, channel_handler handler) {
-    BOOST_ASSERT(machine);
-
     return machine->inject(channel, handler);
 }
 
@@ -82,9 +70,8 @@ slave_t::seal() {
     return machine->seal();
 }
 
-void
-slave_t::terminate(std::error_code ec) {
-    this->ec = std::move(ec);
+auto slave_t::terminate(std::error_code ec) -> void {
+    reason = std::move(ec);
 }
 
 }  // namespace node

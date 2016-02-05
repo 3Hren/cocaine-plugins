@@ -18,8 +18,7 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef COCAINE_NODE_SERVICE_HPP
-#define COCAINE_NODE_SERVICE_HPP
+#pragma once
 
 #include "cocaine/api/service.hpp"
 
@@ -42,11 +41,12 @@ namespace node {
 
 class app_t;
 
-}
-}
-}
+}  // namespace node
+}  // namespace service
+}  // namespace cocaine
 
-namespace cocaine { namespace service {
+namespace cocaine {
+namespace service {
 
 class node_t:
     public api::service_t,
@@ -87,17 +87,16 @@ public:
     overseer(const std::string& name) const;
 
 private:
-    void
-    on_context_shutdown();
+    auto on_context_shutdown() -> void;
 };
 
-}} // namespace cocaine::service
+}  // namespace service
+}  // namespace cocaine
 
-namespace cocaine { namespace error {
+namespace cocaine {
+namespace error {
 
-auto
-node_category() -> const std::error_category&;
+auto node_category() -> const std::error_category&;
 
-}} // namespace cocaine::error
-
-#endif
+}  // namespace error
+}  // namespace cocaine

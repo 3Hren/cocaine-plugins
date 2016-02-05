@@ -68,14 +68,11 @@ public:
     typedef std::function<void(const std::error_code&)> cleanup_handler;
 
 private:
+    /// Construction time point.
+    const std::chrono::high_resolution_clock::time_point birthstamp;
+
     /// Termination reason.
-    std::error_code ec;
-
-    struct {
-        std::string id;
-        std::chrono::high_resolution_clock::time_point birthstamp;
-    } data;
-
+    std::error_code reason;
     /// The slave state machine implementation.
     std::shared_ptr<machine_t> machine;
 
@@ -88,14 +85,15 @@ public:
 
     ~slave_t();
 
-    auto operator=(const slave_t& other) -> slave_t& = delete;
-    auto operator=(slave_t&& other) -> slave_t& = default;
-
     // Observers.
 
-    const std::string&
-    id() const noexcept;
+    /// Retuns const lvalue reference to a slave id.
+    auto id() const noexcept -> const std::string&;
 
+    /// Returns true is this slave is in active state, i.e. ready to serve requests.
+    auto active() const noexcept -> bool;
+
+    // TODO: Return duration instead.
     long long
     uptime() const;
 
@@ -103,9 +101,6 @@ public:
     load() const;
 
     auto stats() const -> slave::stats_t;
-
-    bool
-    active() const noexcept;
 
     /// Returns the profile attached.
     profile_t
@@ -125,8 +120,7 @@ public:
     /// Marks the slave for termination using the given error code.
     ///
     /// It will be terminated later in destructor.
-    void
-    terminate(std::error_code ec);
+    auto terminate(std::error_code ec) -> void;
 };
 
 }  // namespace node
