@@ -9,6 +9,9 @@ class stream_t;
 
 namespace service {
 namespace node {
+
+class app_t;
+
 namespace slave {
 
 class id_t;
