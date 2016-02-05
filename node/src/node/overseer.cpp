@@ -23,9 +23,17 @@
 #include "cocaine/detail/service/node/dispatch/handshake.hpp"
 #include "cocaine/detail/service/node/dispatch/worker.hpp"
 #include "cocaine/detail/service/node/slave/control.hpp"
-#include "cocaine/detail/service/node/util.hpp"
 
 #include <boost/accumulators/statistics/extended_p_square.hpp>
+
+namespace {
+
+template<typename T>
+constexpr auto bound(const T& min, const T& value, const T& max) -> const T& {
+    return std::max(min, std::min(value, max));
+}
+
+}  // namespace
 
 namespace ph = std::placeholders;
 
@@ -579,7 +587,7 @@ overseer_t::rebalance_slaves() {
     const auto pool_target = this->pool_target.load();
 
     // Bound current pool target between [1; limit].
-    const auto target = detail::bound(
+    const auto target = ::bound(
         1UL,
         pool_target ? pool_target : load / profile.grow_threshold,
         profile.pool_limit

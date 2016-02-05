@@ -27,7 +27,6 @@
 #include "cocaine/detail/service/node/slave/state/terminating.hpp"
 #include "cocaine/detail/service/node/dispatch/client.hpp"
 #include "cocaine/detail/service/node/dispatch/worker.hpp"
-#include "cocaine/detail/service/node/util.hpp"
 
 #include <blackhole/logger.hpp>
 
