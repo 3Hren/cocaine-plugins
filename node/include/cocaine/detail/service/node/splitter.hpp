@@ -4,18 +4,20 @@
 
 #include <boost/optional/optional.hpp>
 
-/// \todo: Move to details.
+namespace cocaine {
+namespace detail {
+namespace service {
+namespace node {
+
 class splitter_t {
 public:
     std::string unparsed;
 
-    void
-    consume(const std::string& data) {
+    auto consume(const std::string& data) -> void {
         unparsed.append(data);
     }
 
-    boost::optional<std::string>
-    next() {
+    auto next() -> boost::optional<std::string> {
         auto pos = unparsed.find('\n');
         if (pos == std::string::npos) {
             return boost::none;
@@ -26,3 +28,8 @@ public:
         return boost::make_optional(line);
     }
 };
+
+}  // namespace node
+}  // namespace service
+}  // namespace detail
+}  // namespace cocaine

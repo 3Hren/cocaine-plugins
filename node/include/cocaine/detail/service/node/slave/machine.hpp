@@ -26,7 +26,7 @@
 #include "cocaine/service/node/slave/id.hpp"
 #include "cocaine/service/node/slave/error.hpp"
 #include "cocaine/service/node/slot.hpp"
-#include "cocaine/service/node/splitter.hpp"
+#include "cocaine/detail/service/node/splitter.hpp"
 
 namespace cocaine {
 
@@ -71,6 +71,8 @@ class stats_t;
 namespace cocaine {
 
 using slave::id_t;
+
+using detail::service::node::splitter_t;
 // namespace detail {
 // namespace service {
 // namespace node {
