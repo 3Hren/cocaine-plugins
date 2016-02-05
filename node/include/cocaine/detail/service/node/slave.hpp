@@ -70,7 +70,6 @@ public:
 private:
     /// Construction time point.
     const std::chrono::high_resolution_clock::time_point birthstamp;
-
     /// Termination reason.
     std::error_code reason;
     /// The slave state machine implementation.
@@ -85,9 +84,9 @@ public:
 
     ~slave_t();
 
-    // Observers.
+    /// Observers.
 
-    /// Retuns const lvalue reference to a slave id.
+    /// Returns slave id.
     auto id() const noexcept -> const std::string&;
 
     /// Returns true is this slave is in active state, i.e. ready to serve requests.
