@@ -281,8 +281,7 @@ engine_t::uptime() const {
     return std::chrono::duration_cast<std::chrono::seconds>(now - birthstamp);
 }
 
-void
-engine_t::keep(int count) {
+auto engine_t::failover(int count) -> void {
     count = std::max(0, count);
     COCAINE_LOG_DEBUG(log, "changed keep-alive slave count to {}", count);
 

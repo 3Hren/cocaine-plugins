@@ -15,17 +15,7 @@
 #include "cocaine/service/node/manifest.hpp"
 #include "cocaine/service/node/profile.hpp"
 
-namespace cocaine {
-namespace service {
-namespace node {
-namespace slave {
-
-class id_t;
-
-}  // namespace slave
-}  // namespace node
-}  // namespace service
-}  // namespace cocaine
+#include "forwards.hpp"
 
 namespace cocaine {
 namespace slave {
@@ -37,17 +27,9 @@ using cocaine::service::node::slave::id_t;
 }
 
 namespace cocaine {
-    class client_rpc_dispatch_t;
-    class control_t;
-    class unix_actor_t;
-}  // namespace cocaine
 
-namespace cocaine {
-namespace api {
+class client_rpc_dispatch_t;
 
-class stream_t;
-
-}  // namespace api
 }  // namespace cocaine
 
 namespace cocaine {
@@ -89,12 +71,12 @@ public:
     /// The event will be put into the queue if there are no slaves available at this moment or all
     /// of them are busy.
     ///
-    /// \return the dispatch object, which is ready for processing the appropriate protocol
-    /// messages.
-    ///
     /// \param downstream represents the [Client <- Worker] stream.
     /// \param event an invocation event.
     /// \param id represents slave id to be enqueued (may be none, which means any slave).
+    ///
+    /// \return the dispatch object, which is ready for processing the appropriate protocol
+    ///     messages.
     ///
     /// \todo consult with E. guys about deadline policy.
     auto enqueue(io::streaming_slot<io::app::enqueue>::upstream_type downstream, app::event_t event,
@@ -109,15 +91,15 @@ public:
     ///     received.
     /// \param event an invocation event.
     /// \param id represents slave id to be enqueued (may be none, which means any slave).
+    ///
     /// \return a tx stream.
     auto enqueue(std::shared_ptr<api::stream_t> rx, app::event_t event,
                  boost::optional<slave::id_t> id) -> std::shared_ptr<api::stream_t>;
 
     /// Tries to keep alive at least `count` workers no matter what.
     ///
-    /// Zero value is allowed and means not to spawn workers
-    void
-    keep_alive(int count);
+    /// Zero value is allowed and means not to spawn workers at all.
+    auto failover(int count) -> void;
 
     /// Creates a new handshake dispatch, which will be consumed after a new incoming connection
     /// attached.
@@ -128,10 +110,7 @@ public:
     ///
     /// The handshake message should contain its peer id (likely uuid) by comparing that we either
     /// accept the session or drop it.
-    ///
-    /// \note after successful accepting the balancer will be notified about pool's changes.
-    io::dispatch_ptr_t
-    prototype();
+    auto prototype() -> io::dispatch_ptr_t;
 };
 
 }  // namespace cocaine

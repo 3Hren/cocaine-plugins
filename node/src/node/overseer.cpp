@@ -20,7 +20,7 @@ overseer_t::overseer_t(context_t& context, manifest_t manifest, profile_t profil
 overseer_t::~overseer_t() {
     COCAINE_LOG_DEBUG(engine->log, "overseer is processing terminate request");
 
-    engine->keep(0);
+    engine->failover(0);
     engine->pool->clear();
 }
 
@@ -40,8 +40,8 @@ auto overseer_t::uptime() const -> std::chrono::seconds {
     return engine->uptime();
 }
 
-auto overseer_t::keep_alive(int count) -> void {
-    return engine->keep(count);
+auto overseer_t::failover(int count) -> void {
+    return engine->failover(count);
 }
 
 auto overseer_t::enqueue(io::streaming_slot<io::app::enqueue>::upstream_type downstream,

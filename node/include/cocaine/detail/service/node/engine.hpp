@@ -33,6 +33,8 @@ namespace cocaine {
 // namespace service {
 // namespace node {
 
+class control_t;
+
 using detail::service::node::slave_t;
 
 // TODO: Drop flags. Use method overloading instead.
@@ -105,8 +107,7 @@ public:
     auto enqueue(std::shared_ptr<api::stream_t> rx, app::event_t event,
                  boost::optional<slave::id_t> id) -> std::shared_ptr<api::stream_t>;
 
-    void
-    keep(int count);
+    auto failover(int count) -> void;
 
     io::dispatch_ptr_t
     prototype();

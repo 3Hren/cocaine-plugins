@@ -58,7 +58,7 @@ class control_slot_t:
         {
             on<protocol::chunk>([&](int size) {
                 if (auto overseer = p->overseer.lock()) {
-                    overseer->o->keep_alive(size);
+                    overseer->o->failover(size);
                 }
             });
 
@@ -74,7 +74,7 @@ class control_slot_t:
         discard(const std::error_code&) const {
             COCAINE_LOG_DEBUG(p->log, "client has been disappeared, assuming direct control");
             if (auto overseer = p->overseer.lock()) {
-                overseer->o->keep_alive(0);
+                overseer->o->failover(0);
             }
         }
     };
