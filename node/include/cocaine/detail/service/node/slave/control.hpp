@@ -8,7 +8,7 @@
 
 namespace cocaine {
 
-class state_machine_t;
+class machine_t;
 
 /// Control channel for single slave.
 ///
@@ -19,7 +19,7 @@ class control_t:
     public std::enable_shared_from_this<control_t>
 {
     /// Attached slave.
-    std::shared_ptr<state_machine_t> slave;
+    std::shared_ptr<machine_t> slave;
 
     /// Upstream to send messages to the worker.
     upstream<io::worker::control_tag> stream;
@@ -31,7 +31,7 @@ class control_t:
     std::atomic<bool> closed;
 
 public:
-    control_t(std::shared_ptr<state_machine_t> slave, upstream<io::worker::control_tag> stream);
+    control_t(std::shared_ptr<machine_t> slave, upstream<io::worker::control_tag> stream);
 
     virtual
     ~control_t();

@@ -2,19 +2,20 @@
 
 #include <blackhole/logger.hpp>
 
-#include <cocaine/context.hpp>
+// #include <cocaine/context.hpp>
 #include <cocaine/logging.hpp>
 
 #include <cocaine/traits/tuple.hpp>
 
-#include "cocaine/service/node/slave.hpp"
+// #include "cocaine/detail/service/node/slave.hpp"
+#include "cocaine/detail/service/node/slave/machine.hpp"
 
 namespace ph = std::placeholders;
 
 using namespace cocaine;
 
-control_t::control_t(std::shared_ptr<state_machine_t> slave_, upstream<io::worker::control_tag> stream_):
-    dispatch<io::worker::control_tag>(format("%s/control", slave_->context.manifest.name)),
+control_t::control_t(std::shared_ptr<machine_t> slave_, upstream<io::worker::control_tag> stream_):
+    dispatch<io::worker::control_tag>(format("%s/control", slave_->manifest.name)),
     slave(std::move(slave_)),
     stream(std::move(stream_)),
     timer(slave->loop),
@@ -32,7 +33,7 @@ void
 control_t::start() {
     COCAINE_LOG_DEBUG(slave->log, "heartbeat timer has been started");
 
-    timer.expires_from_now(boost::posix_time::milliseconds(slave->context.profile.timeout.heartbeat));
+    timer.expires_from_now(boost::posix_time::milliseconds(slave->profile.timeout.heartbeat));
     timer.async_wait(std::bind(&control_t::on_timeout, shared_from_this(), ph::_1));
 }
 
@@ -81,7 +82,7 @@ control_t::on_heartbeat() {
     } else {
         COCAINE_LOG_DEBUG(slave->log, "heartbeat timer has been restarted");
 
-        timer.expires_from_now(boost::posix_time::milliseconds(slave->context.profile.timeout.heartbeat));
+        timer.expires_from_now(boost::posix_time::milliseconds(slave->profile.timeout.heartbeat));
         timer.async_wait(std::bind(&control_t::on_timeout, shared_from_this(), ph::_1));
     }
 }

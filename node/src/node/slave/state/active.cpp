@@ -1,6 +1,6 @@
 #include "cocaine/detail/service/node/slave/state/active.hpp"
 
-#include "cocaine/service/node/slave.hpp"
+#include "cocaine/detail/service/node/slave/machine.hpp"
 
 #include "cocaine/detail/service/node/slave/control.hpp"
 #include "cocaine/detail/service/node/slave/state/sealing.hpp"
@@ -8,7 +8,7 @@
 
 using namespace cocaine;
 
-active_t::active_t(std::shared_ptr<state_machine_t> slave_,
+active_t::active_t(std::shared_ptr<machine_t> slave_,
                    std::unique_ptr<api::handle_t> handle_,
                    std::shared_ptr<session_t> session_,
                    std::shared_ptr<control_t> control_):
@@ -57,7 +57,7 @@ active_t::seal() {
 
     slave->migrate(sealing);
 
-    sealing->start(slave->context.profile.timeout.seal);
+    sealing->start(slave->profile.timeout.seal);
 }
 
 void
@@ -68,5 +68,5 @@ active_t::terminate(const std::error_code& ec) {
 
     slave->migrate(terminating);
 
-    terminating->start(slave->context.profile.timeout.terminate, ec);
+    terminating->start(slave->profile.timeout.terminate, ec);
 }

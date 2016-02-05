@@ -9,6 +9,7 @@
 #include "cocaine/errors.hpp"
 #include "cocaine/idl/node.hpp"
 #include "cocaine/locked_ptr.hpp"
+#include "cocaine/logging.hpp"
 #include "cocaine/rpc/actor.hpp"
 #include "cocaine/rpc/actor_unix.hpp"
 #include "cocaine/traits/dynamic.hpp"
@@ -16,6 +17,7 @@
 #include "cocaine/service/node/manifest.hpp"
 #include "cocaine/service/node/overseer.hpp"
 #include "cocaine/service/node/profile.hpp"
+#include "cocaine/service/node/slave/id.hpp"
 
 #include "cocaine/detail/service/node/dispatch/client.hpp"
 #include "cocaine/detail/service/node/dispatch/handshake.hpp"
@@ -56,7 +58,7 @@ class control_slot_t:
         {
             on<protocol::chunk>([&](int size) {
                 if (auto overseer = p->overseer.lock()) {
-                    overseer->o->keep_alive(size);
+                    overseer->o->failover(size);
                 }
             });
 
@@ -72,7 +74,7 @@ class control_slot_t:
         discard(const std::error_code&) const {
             COCAINE_LOG_DEBUG(p->log, "client has been disappeared, assuming direct control");
             if (auto overseer = p->overseer.lock()) {
-                overseer->o->keep_alive(0);
+                overseer->o->failover(0);
             }
         }
     };
@@ -331,6 +333,7 @@ public:
             std::make_shared<asio::io_service>(),
             std::make_unique<app_dispatch_t>(context, manifest.name, overseer_)
         ));
+        // TODO: Here we can throw and noone deregisteres it from the context.
 
         // Create an unix actor and bind to {manifest->name}.{pid} unix-socket.
         using namespace detail::service::node;
@@ -364,7 +367,6 @@ public:
         }
 
         engine->terminate();
-        overseer()->cancel();
     }
 
     virtual
@@ -518,7 +520,7 @@ private:
                 new state::running_t(context, manifest(), profile, log.get(), loop)
             );
         } catch (const std::system_error& err) {
-            COCAINE_LOG_ERROR(log, "unable to publish app: [{}] {}", err.code().value(), err.code().message());
+            COCAINE_LOG_ERROR(log, "unable to publish app: {}", error::to_string(err.code()));
             ec = err.code();
         } catch (const std::exception& err) {
             COCAINE_LOG_ERROR(log, "unable to publish app: {}", err.what());

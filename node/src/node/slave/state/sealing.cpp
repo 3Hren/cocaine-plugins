@@ -2,7 +2,8 @@
 
 #include <blackhole/logger.hpp>
 
-#include "cocaine/service/node/slave.hpp"
+#include "cocaine/detail/service/node/slave.hpp"
+#include "cocaine/detail/service/node/slave/machine.hpp"
 
 #include "cocaine/detail/service/node/slave/state/terminating.hpp"
 
@@ -10,7 +11,7 @@ namespace ph = std::placeholders;
 
 using namespace cocaine::service::node::slave::state;
 
-sealing_t::sealing_t(std::shared_ptr<cocaine::state_machine_t> slave_,
+sealing_t::sealing_t(std::shared_ptr<cocaine::machine_t> slave_,
                      std::unique_ptr<cocaine::api::handle_t> handle_,
                      std::shared_ptr<cocaine::control_t> control_,
                      std::shared_ptr<cocaine::session_t> session_):
@@ -40,7 +41,7 @@ sealing_t::start(unsigned long timeout) {
         return;
     }
 
-    COCAINE_LOG_DEBUG(slave->log, "slave is sealing, timeout: {:.2f} ms", timeout);
+    COCAINE_LOG_DEBUG(slave->log, "slave is sealing, timeout: {} ms", timeout);
 
     timer.expires_from_now(boost::posix_time::milliseconds(timeout));
     timer.async_wait(std::bind(&sealing_t::on_timeout, shared_from_this(), ph::_1));
@@ -58,7 +59,7 @@ sealing_t::terminate(const std::error_code& ec) {
 
     slave->migrate(terminating);
 
-    terminating->start(slave->context.profile.timeout.terminate, ec);
+    terminating->start(slave->profile.timeout.terminate, ec);
 }
 
 void

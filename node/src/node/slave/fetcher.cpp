@@ -2,13 +2,14 @@
 
 #include <blackhole/logger.hpp>
 
-#include "cocaine/service/node/slave.hpp"
+#include "cocaine/detail/service/node/slave.hpp"
+#include "cocaine/detail/service/node/slave/machine.hpp"
 
 namespace ph = std::placeholders;
 
 using namespace cocaine;
 
-fetcher_t::fetcher_t(std::shared_ptr<state_machine_t> slave_):
+fetcher_t::fetcher_t(std::shared_ptr<machine_t> slave_):
     slave(std::move(slave_)),
     watcher(slave->loop)
 {}

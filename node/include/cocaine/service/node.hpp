@@ -1,6 +1,7 @@
 /*
     Copyright (c) 2011-2014 Andrey Sibiryov <me@kobology.ru>
-    Copyright (c) 2011-2014 Other contributors as noted in the AUTHORS file.
+    Copyright (c) 2014-2016 Evgeny Safronov <division494@gmail.com>
+    Copyright (c) 2011-2016 Other contributors as noted in the AUTHORS file.
 
     This file is part of Cocaine.
 
@@ -18,8 +19,9 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef COCAINE_NODE_SERVICE_HPP
-#define COCAINE_NODE_SERVICE_HPP
+#pragma once
+
+#include <memory>
 
 #include "cocaine/api/service.hpp"
 
@@ -30,6 +32,8 @@
 
 #include "cocaine/rpc/dispatch.hpp"
 
+#include "node/forwards.hpp"
+
 namespace cocaine {
 
 class overseer_t;
@@ -38,20 +42,8 @@ class overseer_t;
 
 namespace cocaine {
 namespace service {
-namespace node {
 
-class app_t;
-
-}
-}
-}
-
-namespace cocaine { namespace service {
-
-class node_t:
-    public api::service_t,
-    public dispatch<io::node_tag>
-{
+class node_t : public api::service_t, public dispatch<io::node_tag> {
     context_t& context;
 
     const std::unique_ptr<logging::logger_t> log;
@@ -62,42 +54,30 @@ class node_t:
     std::shared_ptr<dispatch<io::context_tag>> signal;
 
 public:
-    node_t(context_t& context, asio::io_service& asio, const std::string& name, const dynamic_t& args);
+    node_t(context_t& context, asio::io_service& asio, const std::string& name,
+           const dynamic_t& args);
+    ~node_t();
 
-    virtual
-   ~node_t();
+    auto prototype() const -> const io::basic_dispatch_t&;
 
-    virtual
-    auto
-    prototype() const -> const io::basic_dispatch_t&;
+    auto start_app(const std::string& name, const std::string& profile) -> deferred<void>;
+    auto pause_app(const std::string& name) -> void;
+    auto list() const -> dynamic_t;
+    auto info(const std::string& name, io::node::info::flags_t flags) const -> dynamic_t;
 
-    deferred<void>
-    start_app(const std::string& name, const std::string& profile);
-
-    void
-    pause_app(const std::string& name);
-
-    auto
-    list() const -> dynamic_t;
-
-    dynamic_t
-    info(const std::string& name, io::node::info::flags_t flags) const;
-
-    std::shared_ptr<overseer_t>
-    overseer(const std::string& name) const;
+    auto overseer(const std::string& name) const -> std::shared_ptr<overseer_t>;
 
 private:
-    void
-    on_context_shutdown();
+    auto on_context_shutdown() -> void;
 };
 
-}} // namespace cocaine::service
+}  // namespace service
+}  // namespace cocaine
 
-namespace cocaine { namespace error {
+namespace cocaine {
+namespace error {
 
-auto
-node_category() -> const std::error_category&;
+auto node_category() -> const std::error_category&;
 
-}} // namespace cocaine::error
-
-#endif
+}  // namespace error
+}  // namespace cocaine

@@ -18,16 +18,15 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef COCAINE_NODE_SERVICE_INTERFACE_HPP
-#define COCAINE_NODE_SERVICE_INTERFACE_HPP
-
-#include <cocaine/dynamic.hpp>
-
-#include <cocaine/rpc/protocol.hpp>
+#pragma once
 
 #include <system_error>
 
-namespace cocaine { namespace io {
+#include <cocaine/dynamic.hpp>
+#include <cocaine/rpc/protocol.hpp>
+
+namespace cocaine {
+namespace io {
 
 struct app_tag;
 
@@ -201,9 +200,11 @@ struct protocol<node_tag> {
     typedef node scope;
 };
 
-}} // namespace cocaine::io
+}  // namespace io
+}  // namespace cocaine
 
-namespace cocaine { namespace error {
+namespace cocaine {
+namespace error {
 
 enum node_errors {
     deadline_error = 1,
@@ -228,15 +229,12 @@ node_category();
 std::error_code
 make_error_code(node_errors code);
 
-}} // namespace cocaine::error
+}  // namespace error
+}  // namespace cocaine
 
 namespace std {
 
-template<>
-struct is_error_code_enum<cocaine::error::node_errors>:
-    public true_type
-{};
+template <>
+struct is_error_code_enum<cocaine::error::node_errors> : public true_type {};
 
-} // namespace std
-
-#endif
+}  // namespace std

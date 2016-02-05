@@ -18,18 +18,27 @@
 #include "cocaine/api/stream.hpp"
 #include "cocaine/idl/rpc.hpp"
 #include "cocaine/idl/node.hpp"
+#include "cocaine/detail/service/node/slave.hpp"
 
 #include "cocaine/service/node/event.hpp"
 #include "cocaine/service/node/manifest.hpp"
 #include "cocaine/service/node/profile.hpp"
+#include "cocaine/service/node/slave/id.hpp"
 #include "cocaine/service/node/slave/error.hpp"
 #include "cocaine/service/node/slot.hpp"
-#include "cocaine/service/node/splitter.hpp"
+#include "cocaine/detail/service/node/splitter.hpp"
 
 namespace cocaine {
 
+typedef std::shared_ptr<
+    const dispatch<io::event_traits<io::worker::rpc::invoke>::dispatch_type>
+> inject_dispatch_ptr_t;
+
+class overseer_t;
+
 class client_rpc_dispatch_t;
 
+// TODO: Detail namespace.
 class active_t;
 class stopped_t;
 class channel_t;
@@ -42,79 +51,36 @@ namespace service { namespace node { namespace slave { namespace state {
 class sealing_t;
 }}}}
 
-
-class control_t;
 class fetcher_t;
 
-typedef std::shared_ptr<
-    const dispatch<io::event_traits<io::worker::rpc::invoke>::dispatch_type>
-> inject_dispatch_ptr_t;
+}  // namespace cocaine
 
-typedef std::function<void()> close_callback;
-
-namespace service { namespace node { namespace slave {
-
-struct id_t {
-    const std::string id;
-
-    id_t(std::string id):
-        id(std::move(id))
-    {}
-
-    static
-    id_t
-    generate() {
-        return id_t(unique_id_t().string());
-    }
-};
-
-}}}
-
+namespace cocaine {
+namespace service {
+namespace node {
 namespace slave {
 
-struct channel_t {
-    /// Event to be processed.
-    app::event_t event;
+class id_t;
+class stats_t;
 
-    std::shared_ptr<client_rpc_dispatch_t> dispatch;
+}  // namespace slave
+}  // namespace node
+}  // namespace service
+}  // namespace cocaine
 
-    /// An RX stream provided from user. The slave will call its callbacks on every incoming event.
-    std::shared_ptr<api::stream_t> downstream;
-};
+namespace cocaine {
 
-struct stats_t {
-    /// Current state name.
-    std::string state;
+using slave::id_t;
 
-    std::uint64_t tx;
-    std::uint64_t rx;
-    std::uint64_t load;
-    std::uint64_t total;
-
-    boost::optional<std::chrono::high_resolution_clock::time_point> age;
-
-    stats_t();
-};
-
-} // namespace slave
-
-struct slave_context {
-    context_t&  context;
-    manifest_t  manifest;
-    profile_t   profile;
-    std::string id;
-
-    slave_context(context_t& context, manifest_t manifest, profile_t profile) :
-        context(context),
-        manifest(manifest),
-        profile(profile),
-        id(unique_id_t().string())
-    {}
-};
+using detail::service::node::splitter_t;
+// namespace detail {
+// namespace service {
+// namespace node {
+// namespace slave {
 
 /// Actual slave implementation.
-class state_machine_t:
-    public std::enable_shared_from_this<state_machine_t>
+class machine_t:
+    public std::enable_shared_from_this<machine_t>
 {
     friend class active_t;
     friend class stopped_t;
@@ -139,7 +105,14 @@ public:
 private:
     const std::unique_ptr<logging::logger_t> log;
 
-    const slave_context context;
+public:
+    context_t& context;
+
+    const id_t id;
+    const profile_t profile;
+    const manifest_t manifest;
+
+private:
     // TODO: In current implementation this can be invalid, when engine is stopped.
     asio::io_service& loop;
 
@@ -165,13 +138,13 @@ private:
 
 public:
     /// Creates the state machine instance and immediately starts it.
-    static
-    std::shared_ptr<state_machine_t>
-    create(slave_context context, asio::io_service& loop, cleanup_handler cleanup);
+    static auto create(context_t& context, id_t id, profile_t profile, manifest_t manifest,
+        asio::io_service& loop, cleanup_handler cleanup) -> std::shared_ptr<machine_t>;
 
-    state_machine_t(lock_t, slave_context context, asio::io_service& loop, cleanup_handler cleanup);
+    machine_t(lock_t, context_t& context, id_t id, profile_t profile, manifest_t manifest,
+        asio::io_service& loop, cleanup_handler cleanup);
 
-    ~state_machine_t();
+    ~machine_t();
 
     // Observers.
 
@@ -182,11 +155,7 @@ public:
     std::uint64_t
     load() const;
 
-    slave::stats_t
-    stats() const;
-
-    const profile_t&
-    profile() const;
+    auto stats() const -> slave::stats_t;
 
     // Modifiers.
 
@@ -232,70 +201,8 @@ private:
     dump();
 };
 
-// TODO: Rename to `comrade`, because in Soviet Russia slave owns you!
-class slave_t {
-public:
-    typedef state_machine_t::cleanup_handler cleanup_handler;
-
-private:
-    /// Termination reason.
-    std::error_code ec;
-
-    struct {
-        std::string id;
-        std::chrono::high_resolution_clock::time_point birthstamp;
-    } data;
-
-    /// The slave state machine implementation.
-    std::shared_ptr<state_machine_t> machine;
-
-public:
-    slave_t(slave_context context, asio::io_service& loop, cleanup_handler fn);
-    slave_t(const slave_t& other) = delete;
-    slave_t(slave_t&&) = default;
-
-    ~slave_t();
-
-    slave_t& operator=(const slave_t& other) = delete;
-    slave_t& operator=(slave_t&&) = default;
-
-    // Observers.
-
-    const std::string&
-    id() const noexcept;
-
-    long long
-    uptime() const;
-
-    std::uint64_t
-    load() const;
-
-    slave::stats_t
-    stats() const;
-
-    bool
-    active() const noexcept;
-
-    /// Returns the profile attached.
-    profile_t
-    profile() const;
-
-    // Modifiers.
-
-    std::shared_ptr<control_t>
-    activate(std::shared_ptr<session_t> session, upstream<io::worker::control_tag> stream);
-
-    std::uint64_t
-    inject(slave::channel_t& channel, state_machine_t::channel_handler handler);
-
-    void
-    seal();
-
-    /// Marks the slave for termination using the given error code.
-    ///
-    /// It will be terminated later in destructor.
-    void
-    terminate(std::error_code ec);
-};
-
-} // namespace cocaine
+// }  // namespace slave
+// }  // namespace node
+// }  // namespace service
+// }  // namespace detail
+}  // namespace cocaine

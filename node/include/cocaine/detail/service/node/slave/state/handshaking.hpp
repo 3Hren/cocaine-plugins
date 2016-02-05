@@ -8,13 +8,13 @@ namespace api {
     struct handle_t;
 } // namespace api
 
-class state_machine_t;
+class machine_t;
 
 class handshaking_t:
     public state_t,
     public std::enable_shared_from_this<handshaking_t>
 {
-    std::shared_ptr<state_machine_t> slave;
+    std::shared_ptr<machine_t> slave;
 
     synchronized<asio::deadline_timer> timer;
     std::unique_ptr<api::handle_t> handle;
@@ -22,7 +22,7 @@ class handshaking_t:
     std::chrono::high_resolution_clock::time_point birthtime;
 
 public:
-    handshaking_t(std::shared_ptr<state_machine_t> slave, std::unique_ptr<api::handle_t> handle);
+    handshaking_t(std::shared_ptr<machine_t> slave, std::unique_ptr<api::handle_t> handle);
 
     virtual
     const char*

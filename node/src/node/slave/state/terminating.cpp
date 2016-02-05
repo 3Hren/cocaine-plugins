@@ -2,7 +2,8 @@
 
 #include <blackhole/logger.hpp>
 
-#include "cocaine/service/node/slave.hpp"
+#include "cocaine/detail/service/node/slave.hpp"
+#include "cocaine/detail/service/node/slave/machine.hpp"
 
 #include "cocaine/detail/service/node/slave/control.hpp"
 
@@ -10,7 +11,7 @@ namespace ph = std::placeholders;
 
 using namespace cocaine;
 
-terminating_t::terminating_t(std::shared_ptr<state_machine_t> slave_,
+terminating_t::terminating_t(std::shared_ptr<machine_t> slave_,
                              std::unique_ptr<api::handle_t> handle_,
                              std::shared_ptr<control_t> control_,
                              std::shared_ptr<session_t> session_):
@@ -58,7 +59,7 @@ terminating_t::terminate(const std::error_code& ec) {
 
 void
 terminating_t::start(unsigned long timeout, const std::error_code& ec) {
-    COCAINE_LOG_DEBUG(slave->log, "slave is terminating, timeout: {:.2f} ms", timeout);
+    COCAINE_LOG_DEBUG(slave->log, "slave is terminating, timeout: {} ms", timeout);
 
     timer.expires_from_now(boost::posix_time::milliseconds(timeout));
     timer.async_wait(std::bind(&terminating_t::on_timeout, shared_from_this(), ph::_1));

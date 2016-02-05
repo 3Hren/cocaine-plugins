@@ -34,8 +34,12 @@ add_library(node SHARED
     src/node/manifest.cpp
     src/node/overseer.cpp
     src/node/profile.cpp
+    src/node/slave/id
     src/node/slave.cpp
     src/node/slave/channel.cpp
+    src/node/slave/machine
+    src/node/engine
+    src/node/slave/stats
     src/node/slave/control.cpp
     src/node/slave/error.cpp
     src/node/slave/fetcher.cpp
@@ -63,7 +67,7 @@ set(BUILD_FLAGS "${BUILD_FLAGS} -Wextra")
 set(BUILD_FLAGS "${BUILD_FLAGS} -Waddress")
 set(BUILD_FLAGS "${BUILD_FLAGS} -Warray-bounds")
 set(BUILD_FLAGS "${BUILD_FLAGS} -Wbuiltin-macro-redefined")
-set(BUILD_FLAGS "${BUILD_FLAGS} -Wconversion")
+# set(BUILD_FLAGS "${BUILD_FLAGS} -Wconversion")
 set(BUILD_FLAGS "${BUILD_FLAGS} -Wctor-dtor-privacy")
 set(BUILD_FLAGS "${BUILD_FLAGS} -Winit-self")
 set(BUILD_FLAGS "${BUILD_FLAGS} -Wnon-virtual-dtor")

@@ -13,7 +13,7 @@
 
 namespace cocaine {
 
-class state_machine_t;
+class machine_t;
 
 /// An adapter for [Client -> Worker] message passing.
 class client_rpc_dispatch_t:

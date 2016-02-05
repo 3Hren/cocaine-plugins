@@ -28,6 +28,9 @@ private:
     std::shared_ptr<app_state_t> state;
 
 public:
+    // TODO: Drop deferred. Instead use obserers with callbacks or futures.
+    //      -> make_app(...) -> future,
+    //      -> make_app(..., callback) ->void.
     app_t(context_t& context, const std::string& manifest, const std::string& profile, deferred<void> deferred);
    ~app_t();
 

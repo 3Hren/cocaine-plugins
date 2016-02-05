@@ -2,7 +2,8 @@
 
 #include <blackhole/logger.hpp>
 
-#include "cocaine/service/node/slave.hpp"
+#include "cocaine/detail/service/node/slave.hpp"
+#include "cocaine/detail/service/node/slave/machine.hpp"
 
 #include "cocaine/detail/service/node/slave/control.hpp"
 #include "cocaine/detail/service/node/slave/fetcher.hpp"
@@ -12,7 +13,7 @@ namespace ph = std::placeholders;
 
 using namespace cocaine;
 
-handshaking_t::handshaking_t(std::shared_ptr<state_machine_t> slave_, std::unique_ptr<api::handle_t> handle_):
+handshaking_t::handshaking_t(std::shared_ptr<machine_t> slave_, std::unique_ptr<api::handle_t> handle_):
     slave(std::move(slave_)),
     timer(slave->loop),
     handle(std::move(handle_)),
@@ -64,7 +65,7 @@ handshaking_t::activate(std::shared_ptr<session_t> session, upstream<io::worker:
     }
 
     const auto now = std::chrono::high_resolution_clock::now();
-    COCAINE_LOG_DEBUG(slave->log, "slave has been activated in {:.2f} ms",
+    COCAINE_LOG_DEBUG(slave->log, "slave has been activated in {} ms",
         std::chrono::duration<float, std::chrono::milliseconds::period>(now - birthtime).count());
 
     try {
@@ -84,7 +85,7 @@ handshaking_t::activate(std::shared_ptr<session_t> session, upstream<io::worker:
 
 void
 handshaking_t::start(unsigned long timeout) {
-    COCAINE_LOG_DEBUG(slave->log, "slave is waiting for handshake, timeout: {:.2f} ms", timeout);
+    COCAINE_LOG_DEBUG(slave->log, "slave is waiting for handshake, timeout: {} ms", timeout);
 
     timer.apply([&](asio::deadline_timer& timer) {
         timer.expires_from_now(boost::posix_time::milliseconds(timeout));
