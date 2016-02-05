@@ -521,7 +521,7 @@ private:
                 new state::running_t(context, manifest(), profile, log.get(), loop)
             );
         } catch (const std::system_error& err) {
-            COCAINE_LOG_ERROR(log, "unable to publish app: [{}] {}", err.code().value(), err.code().message());
+            COCAINE_LOG_ERROR(log, "unable to publish app: {}", error::to_string(err.code()));
             ec = err.code();
         } catch (const std::exception& err) {
             COCAINE_LOG_ERROR(log, "unable to publish app: {}", err.what());
