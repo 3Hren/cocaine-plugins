@@ -333,6 +333,7 @@ public:
             std::make_shared<asio::io_service>(),
             std::make_unique<app_dispatch_t>(context, manifest.name, overseer_)
         ));
+        // TODO: Here we can throw and noone deregisteres it from the context.
 
         // Create an unix actor and bind to {manifest->name}.{pid} unix-socket.
         using namespace detail::service::node;
