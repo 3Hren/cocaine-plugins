@@ -35,21 +35,23 @@ class docker_t:
     COCAINE_DECLARE_NONCOPYABLE(docker_t)
 
 public:
-    docker_t(context_t& context, asio::io_service& io_context, const std::string& name, const std::string& type, const dynamic_t& args);
+    docker_t(context_t& context,
+             asio::io_service& io_context,
+             const std::string& name,
+             const std::string& type,
+             const dynamic_t& args);
 
     virtual
    ~docker_t();
 
-    virtual
-    std::unique_ptr<api::cancellation_t>
-    spool(std::shared_ptr<api::spool_handle_base_t> handler);
+    virtual std::unique_ptr<api::cancellation_t> spool(
+        std::shared_ptr<api::spool_handle_base_t> handler);
 
-    virtual
-    std::unique_ptr<api::cancellation_t>
-    spawn(const std::string& path,
-          const api::args_t& args,
-          const api::env_t& environment,
-          std::shared_ptr<api::spawn_handle_base_t> handle);
+    virtual std::unique_ptr<api::cancellation_t> spawn(
+        const std::string& path,
+        const api::args_t& args,
+        const api::env_t& environment,
+        std::shared_ptr<api::spawn_handle_base_t> handle);
 
 private:
     context_t& m_context;

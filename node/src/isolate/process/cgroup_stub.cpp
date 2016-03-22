@@ -17,7 +17,6 @@ auto cgroup_category() -> const std::error_category& {
 
 namespace isolate {
 
-
 void* init_cgroups(const char*, const dynamic_t&, logging::logger_t&) {
     return nullptr;
 }
@@ -34,5 +33,5 @@ const char* get_cgroup_error(int) {
     return "can not get error message, cgroup support was disabled during compilation";
 }
 
-} // namespace isolate
-} // namespace cocaine
+}  // namespace isolate
+}  // namespace cocaine

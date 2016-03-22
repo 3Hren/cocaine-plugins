@@ -136,11 +136,9 @@ private:
     void
     output(const char* data, size_t size);
 
-    void
-    output(const std::string& data);
+    void output(const std::string& data);
 
-    void
-    migrate(std::shared_ptr<state_t> desired);
+    void migrate(std::shared_ptr<state_t> desired);
 
     /// Internal termination.
     ///

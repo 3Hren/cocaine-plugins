@@ -26,9 +26,9 @@ class seal_t:
 
 public:
     seal_t(std::shared_ptr<machine_t> slave,
-              std::unique_ptr<api::cancellation_t> handle,
-              std::shared_ptr<control_t> control,
-              std::shared_ptr<session_t> session);
+           std::unique_ptr<api::cancellation_t> handle,
+           std::shared_ptr<control_t> control,
+           std::shared_ptr<session_t> session);
 
     virtual
     void

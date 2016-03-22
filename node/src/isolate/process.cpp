@@ -57,10 +57,8 @@ namespace fs = boost::filesystem;
 
 namespace {
 
-class process_terminator_t:
-    public std::enable_shared_from_this<process_terminator_t>,
-    public api::cancellation_t
-{
+class process_terminator_t : public std::enable_shared_from_this<process_terminator_t>,
+                             public api::cancellation_t {
 public:
     const std::unique_ptr<logging::logger_t> log;
 
@@ -80,13 +78,8 @@ public:
                          uint kill_timeout,
                          std::unique_ptr<logging::logger_t> log_,
                          asio::io_service& loop,
-                         std::shared_ptr<fetcher_t> _fetcher
-    ):
-    log(std::move(log_)),
-    pid(pid_),
-    timer(loop),
-    fetcher(std::move(_fetcher))
-    {
+                         std::shared_ptr<fetcher_t> _fetcher)
+        : log(std::move(log_)), pid(pid_), timer(loop), fetcher(std::move(_fetcher)) {
         timeout.kill = kill_timeout;
         timeout.gc   = 5;
     }
@@ -98,67 +91,66 @@ public:
             int status = 0;
 
             switch (::waitpid(pid, &status, WNOHANG)) {
-                case -1: {
-                    // Some error occurred, check errno.
-                    const int ec = errno;
+            case -1: {
+                // Some error occurred, check errno.
+                const int ec = errno;
 
-                    COCAINE_LOG_WARNING(log, "unable to properly collect the child: {}", ec);
-                }
-                    break;
-                case 0:
-                    // The child is not finished yet, kill it and collect in a blocking way as as last
-                    // resort to prevent zombies.
-                    if (::kill(pid, SIGKILL) == 0) {
-                        if (::waitpid(pid, &status, 0) > 0) {
-                            COCAINE_LOG_DEBUG(log, "child has been killed: {}", status);
-                        } else {
-                            const int ec = errno;
-
-                            COCAINE_LOG_WARNING(log, "unable to properly collect the child: {}", ec);
-                        }
+                COCAINE_LOG_WARNING(log, "unable to properly collect the child: {}", ec);
+            } break;
+            case 0:
+                // The child is not finished yet, kill it and collect in a blocking way as as last
+                // resort to prevent zombies.
+                if (::kill(pid, SIGKILL) == 0) {
+                    if (::waitpid(pid, &status, 0) > 0) {
+                        COCAINE_LOG_DEBUG(log, "child has been killed: {}", status);
                     } else {
-                        // Unable to kill for some reasons, check errno.
                         const int ec = errno;
 
-                        COCAINE_LOG_WARNING(log, "unable to send kill signal to the child: {}", ec);
+                        COCAINE_LOG_WARNING(log, "unable to properly collect the child: {}", ec);
                     }
-                    break;
-                default:
-                    COCAINE_LOG_DEBUG(log, "child has been collected: {}", status);
+                } else {
+                    // Unable to kill for some reasons, check errno.
+                    const int ec = errno;
+
+                    COCAINE_LOG_WARNING(log, "unable to send kill signal to the child: {}", ec);
+                }
+                break;
+            default:
+                COCAINE_LOG_DEBUG(log, "child has been collected: {}", status);
             }
         }
         fetcher->close();
     }
 
-    void
-    cancel() noexcept {
+    void cancel() noexcept {
         int status = 0;
 
         // Attempt to collect the child non-blocking way.
         switch (::waitpid(pid, &status, WNOHANG)) {
-            case -1: {
-                const int ec = errno;
+        case -1: {
+            const int ec = errno;
 
-                COCAINE_LOG_WARNING(log, "unable to collect the child: {}", ec);
-                break;
-            }
-            case 0: {
-                // The child is not finished yet, send SIGTERM and try to collect it later after.
-                COCAINE_LOG_DEBUG(log, "unable to terminate child right now (not ready), sending SIGTERM", {
-                    {"timeout", timeout.kill}
-                });
+            COCAINE_LOG_WARNING(log, "unable to collect the child: {}", ec);
+            break;
+        }
+        case 0: {
+            // The child is not finished yet, send SIGTERM and try to collect it later after.
+            COCAINE_LOG_DEBUG(log,
+                              "unable to terminate child right now (not ready), sending SIGTERM",
+                              {{"timeout", timeout.kill}});
 
-                // Ignore return code here.
-                ::kill(pid, SIGTERM);
+            // Ignore return code here.
+            ::kill(pid, SIGTERM);
 
-                timer.expires_from_now(boost::posix_time::seconds(timeout.kill));
-                timer.async_wait(std::bind(&process_terminator_t::on_kill_timer, shared_from_this(), ph::_1));
-                break;
-            }
-            default:
-                COCAINE_LOG_DEBUG(log, "child has been stopped: {}", status);
+            timer.expires_from_now(boost::posix_time::seconds(timeout.kill));
+            timer.async_wait(
+                std::bind(&process_terminator_t::on_kill_timer, shared_from_this(), ph::_1));
+            break;
+        }
+        default:
+            COCAINE_LOG_DEBUG(log, "child has been stopped: {}", status);
 
-                pid = 0;
+            pid = 0;
         }
     }
 
@@ -175,26 +167,27 @@ private:
         int status = 0;
 
         switch (::waitpid(pid, &status, WNOHANG)) {
-            case -1: {
-                const int ec = errno;
+        case -1: {
+            const int ec = errno;
 
-                COCAINE_LOG_WARNING(log, "unable to collect the child: {}", ec);
-                break;
-            }
-            case 0: {
-                COCAINE_LOG_DEBUG(log, "killing the child, resuming after 5 sec");
+            COCAINE_LOG_WARNING(log, "unable to collect the child: {}", ec);
+            break;
+        }
+        case 0: {
+            COCAINE_LOG_DEBUG(log, "killing the child, resuming after 5 sec");
 
-                // Ignore return code here too.
-                ::kill(pid, SIGKILL);
+            // Ignore return code here too.
+            ::kill(pid, SIGKILL);
 
-                timer.expires_from_now(boost::posix_time::seconds(timeout.gc));
-                timer.async_wait(std::bind(&process_terminator_t::on_gc_action, shared_from_this(), ph::_1));
-                break;
-            }
-            default:
-                COCAINE_LOG_DEBUG(log, "child has been terminated: {}", status);
+            timer.expires_from_now(boost::posix_time::seconds(timeout.gc));
+            timer.async_wait(
+                std::bind(&process_terminator_t::on_gc_action, shared_from_this(), ph::_1));
+            break;
+        }
+        default:
+            COCAINE_LOG_DEBUG(log, "child has been terminated: {}", status);
 
-                pid = 0;
+            pid = 0;
         }
     }
 
@@ -210,23 +203,24 @@ private:
         int status = 0;
 
         switch (::waitpid(pid, &status, WNOHANG)) {
-            case -1: {
-                const int ec = errno;
+        case -1: {
+            const int ec = errno;
 
-                COCAINE_LOG_WARNING(log, "unable to collect the child: {}", ec);
-                break;
-            }
-            case 0: {
-                COCAINE_LOG_DEBUG(log, "child has not been killed, resuming after 5 sec");
+            COCAINE_LOG_WARNING(log, "unable to collect the child: {}", ec);
+            break;
+        }
+        case 0: {
+            COCAINE_LOG_DEBUG(log, "child has not been killed, resuming after 5 sec");
 
-                timer.expires_from_now(boost::posix_time::seconds(timeout.gc));
-                timer.async_wait(std::bind(&process_terminator_t::on_gc_action, shared_from_this(), ph::_1));
-                break;
-            }
-            default:
-                COCAINE_LOG_DEBUG(log, "child has been killed: {}", status);
+            timer.expires_from_now(boost::posix_time::seconds(timeout.gc));
+            timer.async_wait(
+                std::bind(&process_terminator_t::on_gc_action, shared_from_this(), ph::_1));
+            break;
+        }
+        default:
+            COCAINE_LOG_DEBUG(log, "child has been killed: {}", status);
 
-                pid = 0;
+            pid = 0;
         }
     }
 };
@@ -280,18 +274,21 @@ close_all() {
     throw std::system_error(ENOTSUP, std::system_category());
 #endif
 }
-
 }
 
-process_t::process_t(context_t& context, asio::io_service& io_context, const std::string& name, const std::string& type, const dynamic_t& args):
-    category_type(context, io_context, name, type, args),
-    m_context(context),
-    io_context(io_context),
-    m_log(context.log(name)),
-    m_name(name),
-    m_working_directory(fs::path(args.as_object().at("spool", "/var/spool/cocaine").as_string()) / name),
-    m_kill_timeout(args.as_object().at("kill_timeout", 5ULL).as_uint())
-{
+process_t::process_t(context_t& context,
+                     asio::io_service& io_context,
+                     const std::string& name,
+                     const std::string& type,
+                     const dynamic_t& args)
+    : category_type(context, io_context, name, type, args),
+      m_context(context),
+      io_context(io_context),
+      m_log(context.log(name)),
+      m_name(name),
+      m_working_directory(fs::path(args.as_object().at("spool", "/var/spool/cocaine").as_string()) /
+                          name),
+      m_kill_timeout(args.as_object().at("kill_timeout", 5ULL).as_uint()) {
     m_cgroup = init_cgroups(m_name.c_str(), args, *m_log);
 }
 
@@ -299,26 +296,23 @@ process_t::~process_t() {
     destroy_cgroups(m_cgroup, *m_log);
 }
 
-std::unique_ptr<api::cancellation_t>
-process_t::spool(std::shared_ptr<api::spool_handle_base_t> handler) {
+std::unique_ptr<api::cancellation_t> process_t::spool(
+    std::shared_ptr<api::spool_handle_base_t> handler) {
     COCAINE_LOG_INFO(m_log, "deploying app to {}", m_working_directory);
 
     const auto storage = api::storage(m_context, "core");
     const auto archive = storage->get<std::string>("apps", m_name);
 
     archive_t(m_context, archive).deploy(m_working_directory.native());
-    io_context.post([=](){
-        handler->on_ready();
-    });
+    io_context.post([=]() { handler->on_ready(); });
     return std::unique_ptr<api::cancellation_t>(new api::cancellation_t);
 }
 
-std::unique_ptr<api::cancellation_t>
-process_t::spawn(const std::string& path,
-            const api::args_t& args,
-            const api::env_t& environment,
-            std::shared_ptr<api::spawn_handle_base_t> handle)
-{
+std::unique_ptr<api::cancellation_t> process_t::spawn(
+    const std::string& path,
+    const api::args_t& args,
+    const api::env_t& environment,
+    std::shared_ptr<api::spawn_handle_base_t> handle) {
     std::array<int, 2> pipes;
 
     if(::pipe(pipes.data()) != 0) {
@@ -340,20 +334,13 @@ process_t::spawn(const std::string& path,
     ::close(pipes[pid > 0]);
 
     if(pid > 0) {
-        io_context.post([=](){
-            handle->on_ready();
-        });
+        io_context.post([=]() { handle->on_ready(); });
         std::unique_ptr<logging::logger_t> fetcher_logger(m_context.log("process_fetcher"));
         std::unique_ptr<logging::logger_t> terminator_logger(m_context.log("process_terminator"));
         auto fetcher = std::make_shared<fetcher_t>(io_context, handle, std::move(fetcher_logger));
         fetcher->assign(pipes[0]);
         std::unique_ptr<api::cancellation_t> terminator(new process_terminator_t(
-            pid,
-            m_kill_timeout,
-            std::move(terminator_logger),
-            io_context,
-            std::move(fetcher)
-        ));
+            pid, m_kill_timeout, std::move(terminator_logger), io_context, std::move(fetcher)));
         return terminator;
     }
 
@@ -426,5 +413,5 @@ process_t::spawn(const std::string& path,
     std::_Exit(EXIT_FAILURE);
 }
 
-} // namespace isolate
-} // namespace cocaine
+}  // namespace isolate
+}  // namespace cocaine

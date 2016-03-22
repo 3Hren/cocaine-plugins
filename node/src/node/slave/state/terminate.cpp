@@ -18,8 +18,10 @@ namespace state {
 
 namespace ph = std::placeholders;
 
-terminate_t::terminate_t(std::shared_ptr<machine_t> slave_, std::unique_ptr<api::cancellation_t> handle_,
-                         std::shared_ptr<control_t> control_, std::shared_ptr<session_t> session_)
+terminate_t::terminate_t(std::shared_ptr<machine_t> slave_,
+                         std::unique_ptr<api::cancellation_t> handle_,
+                         std::shared_ptr<control_t> control_,
+                         std::shared_ptr<session_t> session_)
     : slave(std::move(slave_)),
       handle(std::move(handle_)),
       control(std::move(control_)),

@@ -36,28 +36,20 @@ namespace api {
 
 // Cancellation token.
 struct cancellation_t {
-    virtual
-    ~cancellation_t() {}
+    virtual ~cancellation_t() {}
 
-    virtual
-    void
-    cancel() noexcept { }
+    virtual void cancel() noexcept {}
 };
 
 // Adapter to cancel shared state.
-struct cancellation_wrapper :
-    public api::cancellation_t
-{
-    cancellation_wrapper(std::shared_ptr<cancellation_t> _ptr) :
-        ptr(std::move(_ptr))
-    {}
+struct cancellation_wrapper : public api::cancellation_t {
+    cancellation_wrapper(std::shared_ptr<cancellation_t> _ptr) : ptr(std::move(_ptr)) {}
 
     ~cancellation_wrapper() {
         ptr->cancel();
     }
 
-    virtual void
-    cancel() noexcept {
+    virtual void cancel() noexcept {
         ptr->cancel();
     }
 
@@ -65,33 +57,21 @@ struct cancellation_wrapper :
 };
 
 struct spool_handle_base_t {
-    virtual
-    ~spool_handle_base_t() {}
+    virtual ~spool_handle_base_t() {}
 
-    virtual
-    void
-    on_abort(const std::error_code&, const std::string& msg) = 0;
+    virtual void on_abort(const std::error_code&, const std::string& msg) = 0;
 
-    virtual
-    void
-    on_ready() = 0;
+    virtual void on_ready() = 0;
 };
 
 struct spawn_handle_base_t {
-    virtual
-    ~spawn_handle_base_t() {}
+    virtual ~spawn_handle_base_t() {}
 
-    virtual
-    void
-    on_terminate(const std::error_code&, const std::string& msg) = 0;
+    virtual void on_terminate(const std::error_code&, const std::string& msg) = 0;
 
-    virtual
-    void
-    on_ready() = 0;
+    virtual void on_ready() = 0;
 
-    virtual
-    void
-    on_data(const std::string& data) = 0;
+    virtual void on_data(const std::string& data) = 0;
 };
 
 typedef std::map<std::string, std::string> args_t;
@@ -100,19 +80,18 @@ typedef std::map<std::string, std::string> env_t;
 struct isolate_t {
     typedef isolate_t category_type;
 
-    virtual
-    ~isolate_t() {
+    virtual ~isolate_t() {
         // Empty.
     }
 
-    virtual
-    std::unique_ptr<cancellation_t>
-    spool(std::shared_ptr<api::spool_handle_base_t> handler) = 0;
+    virtual std::unique_ptr<cancellation_t> spool(
+        std::shared_ptr<api::spool_handle_base_t> handler) = 0;
 
-    virtual
-    std::unique_ptr<cancellation_t>
-    spawn(const std::string& path, const args_t& args, const env_t& environment,
-                std::shared_ptr<api::spawn_handle_base_t> handle) = 0;
+    virtual std::unique_ptr<cancellation_t> spawn(
+        const std::string& path,
+        const args_t& args,
+        const env_t& environment,
+        std::shared_ptr<api::spawn_handle_base_t> handle) = 0;
 
     asio::io_service&
     get_io_service() {
@@ -125,8 +104,8 @@ protected:
               const std::string& /* manifest_name */,
               const std::string& /* isolation_type */,
               const dynamic_t& /* args */
-    ) :
-    io_service(io_service) { }
+              )
+        : io_service(io_service) {}
 
 private:
     asio::io_service& io_service;
@@ -137,16 +116,20 @@ struct category_traits<isolate_t> {
     typedef std::shared_ptr<isolate_t> ptr_type;
 
     struct factory_type : public basic_factory<isolate_t> {
-        virtual
-        ptr_type
-        get(context_t& context, asio::io_service& io_context, const std::string& name, const std::string& type, const dynamic_t& args) = 0;
+        virtual ptr_type get(context_t& context,
+                             asio::io_service& io_context,
+                             const std::string& name,
+                             const std::string& type,
+                             const dynamic_t& args) = 0;
     };
 
-    template<class T>
+    template <class T>
     struct default_factory : public factory_type {
-        virtual
-        ptr_type
-        get(context_t& context, asio::io_service& io_context, const std::string& name, const std::string& type, const dynamic_t& args) {
+        virtual ptr_type get(context_t& context,
+                             asio::io_service& io_context,
+                             const std::string& name,
+                             const std::string& type,
+                             const dynamic_t& args) {
             ptr_type instance;
 
             instances.apply([&](std::map<std::string, std::weak_ptr<isolate_t>>& instances) {
@@ -165,8 +148,7 @@ struct category_traits<isolate_t> {
         synchronized<std::map<std::string, std::weak_ptr<isolate_t>>> instances;
     };
 };
-
 }
-} // namespace cocaine::api
+}  // namespace cocaine::api
 
 #endif
