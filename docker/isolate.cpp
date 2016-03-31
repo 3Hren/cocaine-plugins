@@ -48,16 +48,11 @@ namespace fs = boost::filesystem;
 
 namespace {
 
-struct container_handle_t:
-    public api::cancellation_t
-{
+struct container_handle_t : public api::cancellation_t {
     COCAINE_DECLARE_NONCOPYABLE(container_handle_t)
 
-    container_handle_t(const docker::container_t& container, std::shared_ptr<fetcher_t> _fetcher):
-        fetcher(std::move(_fetcher)),
-        m_container(container),
-        m_terminated()
-    { }
+    container_handle_t(const docker::container_t& container, std::shared_ptr<fetcher_t> _fetcher)
+        : fetcher(std::move(_fetcher)), m_container(container), m_terminated() {}
 
     virtual
    ~container_handle_t() {
@@ -75,10 +70,8 @@ struct container_handle_t:
         fetcher->assign(m_connection.fd());
     }
 
-    virtual
-    void
-    cancel() noexcept {
-        if(m_terminated.test_and_set()) {
+    virtual void cancel() noexcept {
+        if (m_terminated.test_and_set()) {
             try {
                 m_container.kill();
             } catch(...) {
@@ -103,16 +96,19 @@ private:
 
 } // namespace
 
-docker_t::docker_t(context_t& context,  asio::io_service& io_context, const std::string& name, const std::string& type, const dynamic_t& args):
-    category_type(context, io_context, name, type, args),
-    m_context(context),
-    m_log(context.log("app/" + name, {{"isolate", "docker"}})),
-    m_do_pool(false),
-    m_docker_client(
-        docker::endpoint_t::from_string(args.as_object().at("endpoint", "unix:///var/run/docker.sock").as_string()),
-        m_log
-    )
-{
+docker_t::docker_t(context_t& context,
+                   asio::io_service& io_context,
+                   const std::string& name,
+                   const std::string& type,
+                   const dynamic_t& args)
+    : category_type(context, io_context, name, type, args),
+      m_context(context),
+      m_log(context.log("app/" + name, {{"isolate", "docker"}})),
+      m_do_pool(false),
+      m_docker_client(
+          docker::endpoint_t::from_string(
+              args.as_object().at("endpoint", "unix:///var/run/docker.sock").as_string()),
+          m_log) {
     try {
         const auto& config = args.as_object();
         // TODO (@easfronov): in 12.7 take this default path from the profile.
@@ -187,8 +183,8 @@ docker_t::~docker_t() {
     // pass
 }
 
-std::unique_ptr<api::cancellation_t>
-docker_t::spool(std::shared_ptr<api::spool_handle_base_t> handler) {
+std::unique_ptr<api::cancellation_t> docker_t::spool(
+    std::shared_ptr<api::spool_handle_base_t> handler) {
     if(m_do_pool) {
         try {
             m_docker_client.pull_image(m_image, m_tag);
@@ -202,12 +198,11 @@ docker_t::spool(std::shared_ptr<api::spool_handle_base_t> handler) {
     return std::unique_ptr<api::cancellation_t>(new api::cancellation_t());
 }
 
-std::unique_ptr<api::cancellation_t>
-docker_t::spawn(const std::string& path,
-      const api::args_t& args,
-      const api::env_t& environment,
-      std::shared_ptr<api::spawn_handle_base_t> handle)
-{
+std::unique_ptr<api::cancellation_t> docker_t::spawn(
+    const std::string& path,
+    const api::args_t& args,
+    const api::env_t& environment,
+    std::shared_ptr<api::spawn_handle_base_t> handle) {
     try {
         // This is total bullshit, but we need to fully rework docker plugin.
         std::lock_guard<std::mutex> guard(spawn_lock);
@@ -250,9 +245,8 @@ docker_t::spawn(const std::string& path,
         // create container
         container_handle.reset(
             new container_handle_t(m_docker_client.create_container(m_run_config),
-                                   std::make_unique<fetcher_t>(get_io_service(), handle, m_context.log("docker_fetcher"))
-            )
-        );
+                                   std::make_unique<fetcher_t>(
+                                       get_io_service(), handle, m_context.log("docker_fetcher"))));
 
         rapidjson::Value start_args;
         rapidjson::Value binds_json;

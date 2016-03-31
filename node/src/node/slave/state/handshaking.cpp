@@ -17,12 +17,12 @@ namespace state {
 
 namespace ph = std::placeholders;
 
-handshaking_t::handshaking_t(std::shared_ptr<machine_t> slave_, std::unique_ptr<api::cancellation_t> handle_)
+handshaking_t::handshaking_t(std::shared_ptr<machine_t> slave_,
+                             std::unique_ptr<api::cancellation_t> handle_)
     : slave(std::move(slave_)),
       timer(slave->loop),
       handle(std::move(handle_)),
-      birthtime(std::chrono::high_resolution_clock::now())
-{}
+      birthtime(std::chrono::high_resolution_clock::now()) {}
 
 auto handshaking_t::name() const noexcept -> const char* {
     return "handshaking";

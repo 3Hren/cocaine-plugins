@@ -24,8 +24,10 @@ class terminate_t : public state_t, public std::enable_shared_from_this<terminat
     asio::deadline_timer timer;
 
 public:
-    terminate_t(std::shared_ptr<machine_t> slave, std::unique_ptr<api::cancellation_t> handle,
-                  std::shared_ptr<control_t> control, std::shared_ptr<session_t> session);
+    terminate_t(std::shared_ptr<machine_t> slave,
+                std::unique_ptr<api::cancellation_t> handle,
+                std::shared_ptr<control_t> control,
+                std::shared_ptr<session_t> session);
     ~terminate_t();
 
     auto terminating() const noexcept -> bool;

@@ -18,12 +18,13 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <system_error>
 #include <string>
+#include <system_error>
 
 #include <cocaine/forwards.hpp>
 
-namespace cocaine { namespace isolate {
+namespace cocaine {
+namespace isolate {
 
 void* init_cgroups(const char* cgroup_name, const dynamic_t& args, logging::logger_t& log);
 
@@ -33,30 +34,23 @@ void attach_cgroups(void* cgroup_ptr, logging::logger_t& log);
 
 const char* get_cgroup_error(int code);
 
-} // namespace isolate
-} // namespace cocaine
+}  // namespace isolate
+}  // namespace cocaine
 
 namespace cocaine {
 namespace error {
 
-struct cgroup_category_t:
-public std::error_category
-{
-    virtual
-    auto
-    name() const throw() -> const char* {
+struct cgroup_category_t : public std::error_category {
+    virtual auto name() const throw() -> const char* {
         return "cocaine.isolate.process.cgroups";
     }
 
-    virtual
-    auto
-    message(int code) const -> std::string {
+    virtual auto message(int code) const -> std::string {
         return isolate::get_cgroup_error(code);
     }
 };
 
 auto cgroup_category() -> const std::error_category&;
 
-} // namespace error
-} // namespace cocaine
-
+}  // namespace error
+}  // namespace cocaine

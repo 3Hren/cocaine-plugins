@@ -15,11 +15,11 @@
 #include "cocaine/service/node/profile.hpp"
 #include "cocaine/service/node/slave/id.hpp"
 
+#include "cocaine/detail/isolate/fetcher.hpp"
 #include "cocaine/detail/service/node/dispatch/client.hpp"
 #include "cocaine/detail/service/node/dispatch/worker.hpp"
 #include "cocaine/detail/service/node/slave/channel.hpp"
 #include "cocaine/detail/service/node/slave/control.hpp"
-#include "cocaine/detail/isolate/fetcher.hpp"
 #include "cocaine/detail/service/node/slave/load.hpp"
 #include "cocaine/detail/service/node/slave/machine.hpp"
 #include "cocaine/detail/service/node/slave/state/inactive.hpp"
@@ -211,8 +211,7 @@ machine_t::output(const char* data, size_t size) {
     output(std::string(data, size));
 }
 
-void
-machine_t::output(const std::string& data) {
+void machine_t::output(const std::string& data) {
     splitter.consume(data);
     while (auto line = splitter.next()) {
         lines.push_back(*line);

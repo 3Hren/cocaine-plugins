@@ -263,16 +263,13 @@ public:
                const manifest_t& manifest,
                const profile_t& profile,
                logging::logger_t* const log,
-               std::shared_ptr<api::spool_handle_base_t> handle)
-    {
-        isolate = context.get<api::isolate_t>(
-            profile.isolate.type,
-            context,
-            loop,
-            manifest.name,
-            profile.isolate.type,
-            profile.isolate.args
-        );
+               std::shared_ptr<api::spool_handle_base_t> handle) {
+        isolate = context.get<api::isolate_t>(profile.isolate.type,
+                                              context,
+                                              loop,
+                                              manifest.name,
+                                              profile.isolate.type,
+                                              profile.isolate.args);
 
         try {
             // NOTE: Regardless of whether the asynchronous operation completes immediately or not,
@@ -435,22 +432,21 @@ public:
     app_state_t(context_t& context,
                 manifest_t manifest_,
                 profile_t profile_,
-                cocaine::deferred<void> deferred_):
-        log(context.log(format("%s/app", manifest_.name))),
-        context(context),
-        state(new state::stopped_t),
-        deferred(std::move(deferred_)),
-        manifest_(std::move(manifest_)),
-        profile(std::move(profile_)),
-        loop(std::make_shared<asio::io_service>()),
-        work(std::make_unique<asio::io_service::work>(*loop)),
-        isolate(context.get<api::isolate_t>(profile.isolate.type,
-                                            context,
-                                            *loop,
-                                            manifest_.name,
-                                            profile.isolate.type,
-                                            profile.isolate.args))
-    {
+                cocaine::deferred<void> deferred_)
+        : log(context.log(format("%s/app", manifest_.name))),
+          context(context),
+          state(new state::stopped_t),
+          deferred(std::move(deferred_)),
+          manifest_(std::move(manifest_)),
+          profile(std::move(profile_)),
+          loop(std::make_shared<asio::io_service>()),
+          work(std::make_unique<asio::io_service::work>(*loop)),
+          isolate(context.get<api::isolate_t>(profile.isolate.type,
+                                              context,
+                                              *loop,
+                                              manifest_.name,
+                                              profile.isolate.type,
+                                              profile.isolate.args)) {
         COCAINE_LOG_DEBUG(log, "application has initialized its internal state");
 
         thread = boost::thread([=] {
@@ -489,14 +485,13 @@ public:
             }
 
             COCAINE_LOG_DEBUG(log, "app is spooling");
-            state.reset(new state::spooling_t(
-                context,
-                *loop,
-                manifest(),
-                profile,
-                log.get(),
-                std::make_shared<spool_handle_t>(shared_from_this())
-            ));
+            state.reset(
+                new state::spooling_t(context,
+                                      *loop,
+                                      manifest(),
+                                      profile,
+                                      log.get(),
+                                      std::make_shared<spool_handle_t>(shared_from_this())));
         });
     }
 
@@ -506,15 +501,11 @@ public:
     }
 
 private:
-
-    struct spool_handle_t :
-        public api::spool_handle_base_t,
-        public std::enable_shared_from_this<spool_handle_t>
-    {
-        virtual
-        void
-        on_abort(const std::error_code& ec, const std::string& msg) {
-            COCAINE_LOG_ERROR(parent->log, "unable to spool app, [{}] {} - {}", ec.value(), ec.message(), msg);
+    struct spool_handle_t : public api::spool_handle_base_t,
+                            public std::enable_shared_from_this<spool_handle_t> {
+        virtual void on_abort(const std::error_code& ec, const std::string& msg) {
+            COCAINE_LOG_ERROR(
+                parent->log, "unable to spool app, [{}] {} - {}", ec.value(), ec.message(), msg);
             // Dispatch the completion handler to be sure it will be called in a I/O thread to
             // avoid possible deadlocks.
             parent->loop->dispatch(std::bind(&app_state_t::cancel, parent, ec));
@@ -526,18 +517,14 @@ private:
                 // Ignore if the client has been disconnected.
             }
         }
-        virtual
-        void
-        on_ready() {
+        virtual void on_ready() {
             COCAINE_LOG_DEBUG(parent->log, "application has been spooled");
             parent->loop->dispatch(std::bind(&app_state_t::publish, parent));
         }
 
-        spool_handle_t(std::shared_ptr<app_state_t> _parent) :
-            parent(_parent)
-        {}
+        spool_handle_t(std::shared_ptr<app_state_t> _parent) : parent(_parent) {}
 
-    std::shared_ptr<app_state_t> parent;
+        std::shared_ptr<app_state_t> parent;
     };
 
     void

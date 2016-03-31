@@ -28,7 +28,8 @@
 #include <map>
 #include <string>
 
-namespace cocaine { namespace io {
+namespace cocaine {
+namespace io {
 
 struct isolate_tag;
 struct isolate_spawned_tag;
@@ -42,10 +43,7 @@ struct isolate {
             return "spool";
         }
 
-        typedef boost::mpl::list<
-            dynamic_t,
-            std::string
-        > argument_type;
+        typedef boost::mpl::list<dynamic_t, std::string> argument_type;
 
         typedef isolate_spooled_tag dispatch_type;
 
@@ -69,17 +67,15 @@ struct isolate {
             // Worker args
             std::map<std::string, std::string>,
             // Env
-            std::map<std::string, std::string>
-        > argument_type;
+            std::map<std::string, std::string> >
+            argument_type;
 
         typedef isolate_spawned_tag dispatch_type;
 
         typedef stream_of<
             // stdout/stderr
-            std::string
-        >::tag upstream_type;
+            std::string>::tag upstream_type;
     };
-
 };
 
 struct isolate_spawned {
@@ -90,7 +86,6 @@ struct isolate_spawned {
         static const char* alias() {
             return "kill";
         }
-
     };
 };
 
@@ -102,50 +97,35 @@ struct isolate_spooled {
         static const char* alias() {
             return "cancel";
         }
-
     };
 };
 
-template<>
+template <>
 struct protocol<isolate_tag> {
-    typedef boost::mpl::int_<
-        1
-    >::type version;
+    typedef boost::mpl::int_<1>::type version;
 
-    typedef mpl::list<
-        isolate::spool,
-        isolate::spawn
-    > messages;
+    typedef mpl::list<isolate::spool, isolate::spawn> messages;
 
     typedef isolate scope;
 };
 
-template<>
+template <>
 struct protocol<isolate_spawned_tag> {
-    typedef boost::mpl::int_<
-        1
-    >::type version;
+    typedef boost::mpl::int_<1>::type version;
 
-    typedef mpl::list<
-        isolate_spawned::kill
-    > messages;
+    typedef mpl::list<isolate_spawned::kill> messages;
 
     typedef isolate_spawned scope;
 };
 
-template<>
+template <>
 struct protocol<isolate_spooled_tag> {
-    typedef boost::mpl::int_<
-        1
-    >::type version;
+    typedef boost::mpl::int_<1>::type version;
 
-    typedef mpl::list<
-        isolate_spooled::cancel
-    > messages;
+    typedef mpl::list<isolate_spooled::cancel> messages;
 
     typedef isolate_spawned scope;
 };
-
-
-}} // namespace cocaine::io
+}
+}  // namespace cocaine::io
 #endif

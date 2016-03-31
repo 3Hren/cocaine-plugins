@@ -6,8 +6,8 @@
 
 #include <blackhole/logger.hpp>
 
-#include <cocaine/rpc/actor.hpp>
 #include <cocaine/detail/service/node/slave/spawn_handle.hpp>
+#include <cocaine/rpc/actor.hpp>
 
 #include "cocaine/api/isolate.hpp"
 #include "cocaine/service/node/slave/id.hpp"
@@ -88,32 +88,31 @@ auto spawn_t::spawn(unsigned long timeout) -> void {
 
     // Spawn a worker instance and start reading standard outputs of it.
     try {
-        auto isolate = slave->context.get<api::isolate_t>(
-            slave->profile.isolate.type, slave->context, slave->loop, slave->manifest.name,
-            slave->profile.isolate.type, slave->profile.isolate.args);
+        auto isolate = slave->context.get<api::isolate_t>(slave->profile.isolate.type,
+                                                          slave->context,
+                                                          slave->loop,
+                                                          slave->manifest.name,
+                                                          slave->profile.isolate.type,
+                                                          slave->profile.isolate.args);
 
         COCAINE_LOG_DEBUG(slave->log, "spawning");
 
         timer.expires_from_now(boost::posix_time::milliseconds(static_cast<std::int64_t>(timeout)));
         timer.async_wait(trace_t::bind(&spawn_t::on_timeout, shared_from_this(), ph::_1));
 
-        std::shared_ptr<api::spawn_handle_base_t> spawn_handle = std::make_shared<spawn_handle_t>(slave->context.log("spawn_handle"), slave, shared_from_this());
+        std::shared_ptr<api::spawn_handle_base_t> spawn_handle = std::make_shared<spawn_handle_t>(
+            slave->context.log("spawn_handle"), slave, shared_from_this());
         handle = isolate->spawn(
-            slave->manifest.executable,
-            args,
-            slave->manifest.environment,
-            spawn_handle
-        );
+            slave->manifest.executable, args, slave->manifest.environment, spawn_handle);
 
-    } catch(const std::system_error& err) {
+    } catch (const std::system_error& err) {
         COCAINE_LOG_ERROR(slave->log, "unable to spawn slave: {}", err.code().message());
 
         slave->loop.post([=]() { slave->shutdown(err.code()); });
     }
 }
 
-void
-spawn_t::on_timeout(const std::error_code& ec) {
+void spawn_t::on_timeout(const std::error_code& ec) {
     if (ec) {
         COCAINE_LOG_DEBUG(slave->log, "spawn timer has called its completion handler: cancelled");
     } else {

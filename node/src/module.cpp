@@ -1,5 +1,5 @@
-#include <cocaine/detail/isolate/external.hpp>
 #include "cocaine/service/node.hpp"
+#include <cocaine/detail/isolate/external.hpp>
 
 #include "cocaine/detail/isolate/process.hpp"
 
