@@ -43,7 +43,7 @@ struct spool_dispatch_t :
 };
 
 struct spawn_dispatch_t :
-public dispatch<io::event_traits<io::isolate::spawn>::upstream_type>
+    public dispatch<io::event_traits<io::isolate::spawn>::upstream_type>
 {
     typedef io::protocol<io::event_traits<io::isolate::spawn>::upstream_type>::scope protocol;
 
@@ -75,6 +75,10 @@ public dispatch<io::event_traits<io::isolate::spawn>::upstream_type>
 
     void on_error(std::error_code ec, const std::string& msg) {
         spawn_handle->on_terminate(ec, msg);
+    }
+
+    virtual void discard(const std::error_code& ec) const {
+        spawn_handle->on_terminate(ec, "external isolation session was discarded");
     }
 
     std::shared_ptr<api::spawn_handle_base_t> spawn_handle;
