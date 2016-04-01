@@ -1,3 +1,63 @@
+cocaine-plugins (0.12.7.5) unstable; urgency=low
+
+  * Bug fix: workers should no longer be discarded if a handshake frame was
+    received while the slave's engine is in spawning state. This can be either
+    if the runtime is overloaded or applications spawns too fast.
+  * Bug fix: application engine now should properly count spawn duration.
+
+ -- Evgeny Safronov <division494@gmail.com>  Fri, 01 Apr 2016 13:28:00 +0300
+
+cocaine-plugins (0.12.7.4) unstable; urgency=low
+
+  * Fix broken symlink for Node Service Package.
+
+ -- Evgeny Safronov <division494@gmail.com>  Wed, 16 Mar 2016 18:03:31 +0300
+
+cocaine-plugins (0.12.7.3) unstable; urgency=low
+
+  * The same as previous change, but for runtime package.
+
+ -- Evgeny Safronov <division494@gmail.com>  Wed, 16 Mar 2016 17:03:58 +0300
+
+cocaine-plugins (0.12.7.2) unstable; urgency=low
+
+  * Create symlinks to the Node Service dynamic library in development package.
+
+ -- Evgeny Safronov <division494@gmail.com>  Wed, 16 Mar 2016 16:20:36 +0300
+
+cocaine-plugins (0.12.7.1) unstable; urgency=low
+
+  * Release version.
+  * Clean up Node Service API by hiding all real details.
+  * Application service can now process tagged events.
+  * Application service can now process events with deadline policies.
+
+ -- Evgeny Safronov <division494@gmail.com>  Mon, 14 Mar 2016 11:54:01 +0300
+
+cocaine-plugins (0.12.6.1) unstable; urgency=low
+
+  * Release version.
+
+ -- Evgeny Safronov <division494@gmail.com>  Wed, 09 Mar 2016 13:44:43 +0300
+
+cocaine-plugins (0.12.6.0-alpha2) unstable; urgency=low
+
+  * Bug fix: fix billion of sign conversion warnings from Node service.
+
+ -- Evgeny Safronov <division494@gmail.com>  Wed, 02 Mar 2016 17:17:26 +0300
+
+cocaine-plugins (0.12.6.0-alpha1) unstable; urgency=low
+
+  * Bug fix: fix default runtime path for Docker plugin.
+
+ -- Evgeny Safronov <division494@gmail.com>  Mon, 29 Feb 2016 15:57:21 +0300
+
+cocaine-plugins (0.12.6.0-alpha0) unstable; urgency=low
+
+  * WTF version.
+
+ -- Evgeny Safronov <division494@gmail.com>  Fri, 26 Feb 2016 15:58:52 +0300
+
 cocaine-plugins (0.12.5.2) unstable; urgency=low
 
   * Bug fix: properly close transmission side of channels when using stream API.
