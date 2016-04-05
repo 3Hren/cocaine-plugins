@@ -342,7 +342,7 @@ machine_t::dump() {
         indexes.emplace_back(buf, len);
     }
 
-    COCAINE_LOG_INFO(log, "slave is dumping output to 'crashlogs/{}' using [{}] indexes",
+    COCAINE_LOG_INFO(log, "рабъ окаянный сътворитъ словоблудіе въ 'crashlogs/{}' черезъ [{}] индексъ",
                      key, boost::join(indexes, ", "));
 
     try {
