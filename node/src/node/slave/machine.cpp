@@ -315,7 +315,7 @@ machine_t::revoke(std::uint64_t id, channel_handler handler) {
 void
 machine_t::dump() {
     if (lines.empty() && splitter.unparsed.empty()) {
-        COCAINE_LOG_WARNING(log, "slave has died in silence");
+        COCAINE_LOG_WARNING(log, "рабъ умеръ въ тишинѣ");
         return;
     }
 
@@ -342,7 +342,7 @@ machine_t::dump() {
         indexes.emplace_back(buf, len);
     }
 
-    COCAINE_LOG_INFO(log, "slave is dumping output to 'crashlogs/{}' using [{}] indexes",
+    COCAINE_LOG_INFO(log, "рабъ окаянный сътворитъ словоблудіе въ 'crashlogs/{}' черезъ [{}] индексъ",
                      key, boost::join(indexes, ", "));
 
     try {
