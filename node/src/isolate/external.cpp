@@ -2,8 +2,10 @@
 #include "cocaine/idl/isolate.hpp"
 
 #include <cocaine/context.hpp>
+#include <cocaine/context/signal.hpp>
 #include <cocaine/dynamic.hpp>
 #include <cocaine/errors.hpp>
+#include <cocaine/idl/context.hpp>
 #include <cocaine/logging.hpp>
 #include <cocaine/engine.hpp>
 
@@ -11,6 +13,8 @@
 #include <cocaine/rpc/session.hpp>
 
 #include <cocaine/traits/dynamic.hpp>
+#include <cocaine/traits/endpoint.hpp>
+#include <cocaine/traits/vector.hpp>
 
 #include <blackhole/logger.hpp>
 #include <asio/ip/tcp.hpp>
@@ -153,11 +157,14 @@ struct external_t::inner_t :
     context_t& context;
     asio::io_service& io_context;
     std::unique_ptr<tcp::socket> socket;
-    synchronized<std::shared_ptr<session_t>> session;
+    asio::deadline_timer retry_timer;
+    std::shared_ptr<session_t> session;
     const std::string name;
     dynamic_t args;
     std::unique_ptr<logging::logger_t> log;
     std::atomic<id_t> cur_id;
+    std::shared_ptr<dispatch<io::context_tag>> signal_dispatch;
+    bool prepared;
 
 
     std::vector<std::shared_ptr<spool_load_t>> spool_queue;
@@ -167,10 +174,17 @@ struct external_t::inner_t :
         context(_context),
         io_context(_io_context),
         socket(),
+        retry_timer(io_context),
         name(_name),
         args(_args),
-        log(context.log("universal_isolate"))
+        log(context.log("universal_isolate")),
+        signal_dispatch(std::make_shared<dispatch<io::context_tag>>("universal_isolate_signal"))
     {
+        signal_dispatch->on<io::context::prepared>([&](){
+            prepared = true;
+            on_ready();
+        });
+        context.signal_hub().listen(signal_dispatch, io_context);
         if(args.as_object().at("type", "").as_string().empty()) {
             args.as_object()["type"] = type;
         }
@@ -184,35 +198,43 @@ struct external_t::inner_t :
             static_cast<unsigned short>(ep.at("port", 29042u).as_uint())
         );
 
+        auto retry_timeout = args.as_object().at("retry_timeout", 5u).as_uint();
+
         COCAINE_LOG_INFO(log, "connecting to external isolation daemon to {}", boost::lexical_cast<std::string>(endpoint));
         auto self_shared = shared_from_this();
         socket->async_connect(endpoint, [=](const std::error_code& ec) {
             if (!ec) {
-                COCAINE_LOG_INFO(log, "successfully connected to external isolation daemon");
-                session.apply([&](std::shared_ptr<session_t>& session){
-                    session = self_shared->context.engine().attach(std::move(socket), nullptr);
-                    COCAINE_LOG_INFO(log, "processing {} queued spool requests", spool_queue.size());
-                    for (auto& load: spool_queue) {
-                        load->apply(session);
-                    }
-                    spool_queue.clear();
-                    COCAINE_LOG_INFO(log, "processing {} queued spawn requests", spawn_queue.size());
-                    for(auto& load: spawn_queue) {
-                        load->apply(session);
-                    }
-                    spawn_queue.clear();
-                });
+                self_shared->on_ready();
             } else {
-                for (auto& load: spool_queue) {
-                    load->handle->on_abort(ec, "could not connect to external isolation daemon");
-                }
-                spool_queue.clear();
-                for(auto& load: spawn_queue) {
-                    load->handle->on_terminate(ec, "could not connect to external isolation daemon");
-                }
-                spawn_queue.clear();
+                COCAINE_LOG_WARNING(log, "could not connect to external isolation daemon - {}, retrying", ec.message());
+                retry_timer.expires_from_now(boost::posix_time::seconds(retry_timeout));
+                retry_timer.async_wait([=](const std::error_code& ec){
+                    if(!ec) {
+                        connect();
+                    } else {
+                        COCAINE_LOG_ERROR(log, "retry timer was reset - {}", ec.message());
+                    }
+                });
             }
         });
+    }
+
+    void on_ready() {
+        if(!prepared || ! session) {
+            return;
+        }
+        COCAINE_LOG_INFO(log, "successfully connected to external isolation daemon and prepared context");
+        session = context.engine().attach(std::move(socket), nullptr);
+        COCAINE_LOG_INFO(log, "processing {} queued spool requests", spool_queue.size());
+        for (auto& load: spool_queue) {
+            load->apply(session);
+        }
+        spool_queue.clear();
+        COCAINE_LOG_INFO(log, "processing {} queued spawn requests", spawn_queue.size());
+        for(auto& load: spawn_queue) {
+            load->apply(session);
+        }
+        spawn_queue.clear();
     }
 
 };
@@ -286,9 +308,9 @@ external_t::external_t(context_t& context, asio::io_service& io_context, const s
 std::unique_ptr<api::cancellation_t>
 external_t::spool(std::shared_ptr<api::spool_handle_base_t> handler) {
     std::shared_ptr<spool_load_t> load(new spool_load_t(*inner, std::move(handler)));
-    inner->session.apply([&](decltype(inner->session.unsafe())& session){
-        if(session) {
-            load->apply(session);
+    inner->io_context.post([=](){
+        if(inner->session && inner->prepared) {
+            load->apply(inner->session);
         } else {
             inner->spool_queue.push_back(load);
         }
@@ -303,9 +325,9 @@ external_t::spawn(const std::string& path,
             std::shared_ptr<api::spawn_handle_base_t> handler) {
 
     std::shared_ptr<spawn_load_t> load(new spawn_load_t(*inner, std::move(handler), path, worker_args, environment));
-    inner->session.apply([&](decltype(inner->session.unsafe())& session){
-        if(session) {
-            load->apply(session);
+    inner->io_context.post([=](){
+        if(inner->session && inner->prepared) {
+            load->apply(inner->session);
         } else {
             inner->spawn_queue.push_back(load);
         }
