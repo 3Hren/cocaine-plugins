@@ -204,6 +204,7 @@ struct external_t::inner_t :
         auto self_shared = shared_from_this();
         socket->async_connect(endpoint, [=](const std::error_code& ec) {
             if (!ec) {
+                session = context.engine().attach(std::move(socket), nullptr);
                 self_shared->on_ready();
             } else {
                 COCAINE_LOG_WARNING(log, "could not connect to external isolation daemon - {}, retrying", ec.message());
@@ -220,11 +221,15 @@ struct external_t::inner_t :
     }
 
     void on_ready() {
-        if(!prepared || ! session) {
+        if(!prepared) {
+            COCAINE_LOG_DEBUG(log, "external isolation daemon connection is ready, but context is still not prepared");
             return;
         }
-        COCAINE_LOG_INFO(log, "successfully connected to external isolation daemon and prepared context");
-        session = context.engine().attach(std::move(socket), nullptr);
+        if(!session) {
+            COCAINE_LOG_DEBUG(log, "context is ready, but external isolation daemon is not connected yet");
+            return;
+        }
+        COCAINE_LOG_INFO(log, "successfully connected to external isolation daemon and prepared context, dequeing spool and spawn requests");
         COCAINE_LOG_INFO(log, "processing {} queued spool requests", spool_queue.size());
         for (auto& load: spool_queue) {
             load->apply(session);
@@ -310,8 +315,10 @@ external_t::spool(std::shared_ptr<api::spool_handle_base_t> handler) {
     std::shared_ptr<spool_load_t> load(new spool_load_t(*inner, std::move(handler)));
     inner->io_context.post([=](){
         if(inner->session && inner->prepared) {
+            COCAINE_LOG_DEBUG(inner->log, "processing spool request");
             load->apply(inner->session);
         } else {
+            COCAINE_LOG_DEBUG(inner->log, "queuing spool request");
             inner->spool_queue.push_back(load);
         }
     });
@@ -327,8 +334,10 @@ external_t::spawn(const std::string& path,
     std::shared_ptr<spawn_load_t> load(new spawn_load_t(*inner, std::move(handler), path, worker_args, environment));
     inner->io_context.post([=](){
         if(inner->session && inner->prepared) {
+            COCAINE_LOG_DEBUG(inner->log, "processing spawn request");
             load->apply(inner->session);
         } else {
+            COCAINE_LOG_DEBUG(inner->log, "queuing spawn request");
             inner->spawn_queue.push_back(load);
         }
     });
