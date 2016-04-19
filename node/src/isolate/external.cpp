@@ -100,7 +100,8 @@ struct spool_load_t :
 
     spool_load_t(external_t::inner_t& _inner, std::shared_ptr<api::spool_handle_base_t> _handle) :
         inner(_inner),
-        handle(std::move(_handle))
+        handle(std::move(_handle)),
+        cancelled(false)
     {}
 
     ~spool_load_t() {
@@ -136,7 +137,8 @@ struct spawn_load_t :
         handle(std::move(_handle)),
         path(_path),
         worker_args(_worker_args),
-        environment(_environment)
+        environment(_environment),
+        cancelled(false)
     {}
 
     ~spawn_load_t() {
@@ -177,8 +179,9 @@ struct external_t::inner_t :
         retry_timer(io_context),
         name(_name),
         args(_args),
-        log(context.log("universal_isolate")),
-        signal_dispatch(std::make_shared<dispatch<io::context_tag>>("universal_isolate_signal"))
+        log(context.log("universal_isolate/"+_name)),
+        signal_dispatch(std::make_shared<dispatch<io::context_tag>>("universal_isolate_signal")),
+        prepared(false)
     {
         signal_dispatch->on<io::context::prepared>([&](){
             prepared = true;
@@ -202,8 +205,16 @@ struct external_t::inner_t :
 
         COCAINE_LOG_INFO(log, "connecting to external isolation daemon to {}", boost::lexical_cast<std::string>(endpoint));
         auto self_shared = shared_from_this();
+
+        retry_timer.expires_from_now(boost::posix_time::seconds(retry_timeout));
+        retry_timer.async_wait([=](const std::error_code& ec){
+            if(!ec) {
+                socket->cancel();
+            }
+        });
         socket->async_connect(endpoint, [=](const std::error_code& ec) {
-            if (!ec) {
+            if (retry_timer.cancel() && !ec) {
+                COCAINE_LOG_INFO(log, "connected to isolation daemon");
                 session = context.engine().attach(std::move(socket), nullptr);
                 self_shared->on_ready();
             } else {
@@ -248,11 +259,14 @@ void spool_load_t::apply(std::shared_ptr<session_t> session) {
     stream.apply([&](decltype(stream.unsafe())& stream){
         if(!cancelled) {
             try {
-                stream = session->fork(std::make_shared<spool_dispatch_t>("external_spool_" + inner.name, handle));
+                stream = session->fork(std::make_shared<spool_dispatch_t>("external_spool/" + inner.name, handle));
                 stream->send<io::isolate::spool>(inner.args, inner.name);
             } catch(const std::system_error& e) {
+                COCAINE_LOG_ERROR(inner.log, "failed to process spool request - {}", error::to_string(e));
                 handle->on_abort(e.code(), e.what());
             }
+        } else {
+            COCAINE_LOG_WARNING(inner.log, "can not process spool request - cancelled");
         }
     });
 }
@@ -278,7 +292,7 @@ spawn_load_t::apply(std::shared_ptr<session_t> session) {
     stream.apply([&](decltype(stream.unsafe())& stream){
         if(!cancelled) {
             try {
-                stream = session->fork(std::make_shared<spawn_dispatch_t>("external_spawn_" + inner.name, handle));
+                stream = session->fork(std::make_shared<spawn_dispatch_t>("external_spawn/" + inner.name, handle));
                 stream->send<io::isolate::spawn>(inner.args, inner.name, path, worker_args, environment);
             } catch(const std::system_error& e) {
                 handle->on_terminate(e.code(), e.what());
@@ -307,7 +321,7 @@ external_t::external_t(context_t& context, asio::io_service& io_context, const s
     isolate_t(context, io_context, name, type, args),
     inner(new inner_t(context, io_context, name, type, args))
 {
-    io_context.post(std::bind(&inner_t::connect, inner));
+    inner->connect();
 }
 
 std::unique_ptr<api::cancellation_t>
