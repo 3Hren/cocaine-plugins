@@ -228,14 +228,12 @@ struct external_t::inner_t :
     }
 
     void reconnect(const std::error_code& e) {
-        auto shared_self = shared_from_this();
-        io_context.post([=]() {
+        if(session) {
             COCAINE_LOG_INFO(log, "reconnecting to external isolation daemon");
-            shared_self->session->detach(e);
-            COCAINE_LOG_INFO(log, "session pressure - {}", shared_self->session->memory_pressure());
-            shared_self->session.reset();
-            shared_self->connect();
-        });
+            session->detach(e);
+            session.reset();
+            connect();
+        }
     }
 
     void on_fail(const std::error_code& ec) {
@@ -311,7 +309,6 @@ spool_load_t::cancel() noexcept {
                 } catch(const std::system_error& e) {
                     COCAINE_LOG_WARNING(_inner->log, "could not cancel spool request: {}", error::to_string(e));
                     handle->on_abort(e.code(), error::to_string(e));
-                    _inner->reconnect(e.code());
                 }
             }
         }
@@ -355,7 +352,6 @@ spawn_load_t::cancel() noexcept {
                 } catch(const std::system_error& e) {
                     COCAINE_LOG_WARNING(_inner->log, "could not process spawn kill request: {}", error::to_string(e));
                     handle->on_terminate(e.code(), error::to_string(e));
-                    _inner->reconnect(e.code());
                 }
             }
         }
