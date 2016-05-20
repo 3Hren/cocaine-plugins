@@ -67,6 +67,13 @@ public:
     boost::optional<std::shared_ptr<const dispatch_type>>
     operator()(tuple_type&& args, upstream_type&& upstream)
     {
+        return operator()({}, std::move(args), std::move(upstream));
+    }
+
+    virtual
+    boost::optional<std::shared_ptr<const dispatch_type>>
+    operator()(const std::vector<hpack::header_t>&, tuple_type&& args, upstream_type&& upstream)
+    {
         COCAINE_LOG_INFO(log, "spool. {}, {}", boost::lexical_cast<std::string>(std::get<0>(args)), std::get<1>(args));
         sleep(1);
         upstream.send<protocol::value>();
@@ -85,6 +92,13 @@ public:
     virtual
     boost::optional<std::shared_ptr<const dispatch_type>>
     operator()(tuple_type&& args, upstream_type&& upstream)
+    {
+        return operator()({}, std::move(args), std::move(upstream));
+    }
+
+    virtual
+    boost::optional<std::shared_ptr<const dispatch_type>>
+    operator()(const std::vector<hpack::header_t>&, tuple_type&& args, upstream_type&& upstream)
     {
         auto formatter = [] (const std::map<std::string, std::string>& data) -> std::string {
             std::string result;

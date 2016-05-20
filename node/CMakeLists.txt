@@ -66,6 +66,20 @@ add_library(isolate_mock SHARED
     tests/isolate_mock.cpp
 )
 
+add_executable(node-tests
+    tests/node
+)
+
+set_target_properties(node-tests PROPERTIES
+    COMPILE_FLAGS "-std=c++14"
+)
+
+target_link_libraries(node-tests
+	cocaine-core
+    node
+    blackhole
+)
+
 target_link_libraries(isolate_mock
 	${PLUGIN_NAME}
 )
@@ -102,9 +116,9 @@ set_target_properties(${PLUGIN_NAME} PROPERTIES
 )
 
 set_target_properties(isolate_mock PROPERTIES
-        COMPILE_FLAGS "${BUILD_FLAGS}"
-        PREFIX ""
-        SUFFIX "${COCAINE_PLUGIN_SUFFIX}"
+    COMPILE_FLAGS "${BUILD_FLAGS}"
+    PREFIX ""
+    SUFFIX "${COCAINE_PLUGIN_SUFFIX}"
 )
 
 install(TARGETS ${PLUGIN_NAME}
