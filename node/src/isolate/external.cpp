@@ -254,10 +254,7 @@ struct external_t::inner_t :
 
     void on_fail(const std::error_code& ec) {
         last_failed_connect_time = std::chrono::system_clock::now();
-        seal_time *= 2;
-        if(seal_time > max_seal_time) {
-            seal_time = max_seal_time;
-        }
+        seal_time = std::min(seal_time * 2, max_seal_time);
         for (auto& load: spool_queue) {
             load->handle->on_abort(ec, "could not connect to external dispatch");
         }
