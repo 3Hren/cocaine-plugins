@@ -293,6 +293,10 @@ machine_t::shutdown(std::error_code ec) {
         dump();
     }
 
+    data.timers.apply([&](timers_map_t& timers){
+        timers.clear();
+    });
+
     data.channels.apply([&](channels_map_t& channels) {
         const auto size = channels.size();
         if (size > 0) {
@@ -307,6 +311,7 @@ machine_t::shutdown(std::error_code ec) {
 
         channels.clear();
     });
+
 
     // Check if the slave has been terminated externally. If so, do not call the cleanup callback.
     if (closed) {
