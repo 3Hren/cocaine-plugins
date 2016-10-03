@@ -25,11 +25,18 @@ namespace cocaine {
 namespace storage {
 class postgres_t : public api::storage_t {
 public:
+    template<class T>
+    using callback = std::function<void(std::future<T>)>;
+
     postgres_t(context_t& context, const std::string& name, const dynamic_t& args);
+
+    using api::storage_t::read;
 
     virtual
     void
     read(const std::string& collection, const std::string& key, callback<std::string> cb);
+
+    using api::storage_t::write;
 
     virtual
     void
@@ -39,9 +46,13 @@ public:
           const std::vector<std::string>& tags,
           callback<void> cb);
 
+    using api::storage_t::remove;
+
     virtual
     void
     remove(const std::string& collection, const std::string& key, callback<void> cb);
+
+    using api::storage_t::find;
 
     virtual
     void

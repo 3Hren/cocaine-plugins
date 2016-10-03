@@ -27,6 +27,6 @@ INSTALL(TARGETS postgres
 
 INSTALL(
         DIRECTORY
-        include/cocaine/idl
+        include/cocaine/error
         DESTINATION include/cocaine
         COMPONENT development)
