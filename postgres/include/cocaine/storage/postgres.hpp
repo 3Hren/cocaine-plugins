@@ -48,6 +48,7 @@ public:
     find(const std::string& collection, const std::vector<std::string>& tags, callback<std::vector<std::string>> cb);
 
 private:
+    std::shared_ptr<logging::logger_t> log;
     std::string table_name;
     api::storage_ptr wrapped;
     postgres::pool_t pg_pool;

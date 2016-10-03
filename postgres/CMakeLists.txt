@@ -4,6 +4,7 @@ INCLUDE_DIRECTORIES(
 LOCATE_LIBRARY(libpqxx "pqxx/version.hxx" "pqxx")
 
 ADD_LIBRARY(postgres MODULE
+        src/error/postgres.cpp
         src/module.cpp
         src/pool.cpp
         src/postgres.cpp)

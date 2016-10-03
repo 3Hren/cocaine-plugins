@@ -1,12 +1,20 @@
 #include "cocaine/storage/postgres.hpp"
+#include "cocaine/error/postgres.hpp"
 
+#include <cocaine/context.hpp>
 #include <cocaine/dynamic.hpp>
+#include <cocaine/logging.hpp>
+
+#include <blackhole/logger.hpp>
+
+#include <pqxx/except.hxx>
 
 namespace cocaine {
 namespace storage {
 
 postgres_t::postgres_t(context_t& context, const std::string& name, const dynamic_t& args) :
     api::storage_t(context, name, args),
+    log(context.log("storage/postgres/" + name)),
     table_name(args.as_object().at("pg_table_name", "cocaine_index").as_string()),
     wrapped(api::storage(context, args.as_object().at("pg_underlying_storage", "core").as_string())),
     pg_pool(args.as_object().at("pg_pool_size", 1ul).as_uint(),
@@ -15,6 +23,7 @@ postgres_t::postgres_t(context_t& context, const std::string& name, const dynami
 
 void
 postgres_t::read(const std::string& collection, const std::string& key, callback<std::string> cb) {
+    COCAINE_LOG_DEBUG(log, "reading {}/{} via wrapped storage", collection, key);
     wrapped->read(collection, key, std::move(cb));
 }
 
@@ -25,8 +34,10 @@ postgres_t::write(const std::string& collection,
                    const std::vector<std::string>& tags,
                    callback<void> cb)
 {
+    COCAINE_LOG_DEBUG(log, "writing {}/{} via wrapped storage", collection, key);
     wrapped->write(collection, key, blob, {}, [=](std::future<void> fut){
         try {
+            COCAINE_LOG_DEBUG(log, "enqueuing index setup for {}/{}", collection, key);
             // First we check if underlying write succeed
             fut.get();
             pg_pool.execute([=](pqxx::connection_base& connection){
@@ -36,15 +47,17 @@ postgres_t::write(const std::string& collection,
                     dynamic_t tags_obj(tags);
                     auto tag_string = boost::lexical_cast<std::string>(tags_obj);
                     pqxx::work transaction(connection);
-                    transaction.exec(
-                        "INSERT INTO " + transaction.esc(table_name) + "(collection, key, tags) VALUES(" +
-                        transaction.quote(collection) + ", " +
-                        transaction.quote(key) + ", " +
-                        transaction.quote(tag_string) + ");");
+                    std::string query("INSERT INTO " + transaction.esc(table_name) + "(collection, key, tags) VALUES(" +
+                                      transaction.quote(collection) + ", " +
+                                      transaction.quote(key) + ", " +
+                                      transaction.quote(tag_string) + ");");
+                    COCAINE_LOG_DEBUG(log, "executing {}", query);
+                    transaction.exec(query);
                     transaction.commit();
                     cb(make_ready_future());
-                } catch (...) {
-                    cb(make_exceptional_future<void>());
+                } catch (const std::exception& e) {
+                    COCAINE_LOG_ERROR(log, "error during index update - {}", e.what());
+                    cb(make_exceptional_future<void>(make_error_code(error::unknown_pg_error), e.what()));
                 }
             });
         } catch(...) {
@@ -62,13 +75,16 @@ postgres_t::remove(const std::string& collection, const std::string& key, callba
             pg_pool.execute([=](pqxx::connection_base& connection){
                 try {
                     pqxx::work transaction(connection);
-                    transaction.exec("DELETE FROM " + transaction.esc(table_name) + "WHERE " +
-                                     "collection = " + transaction.quote(collection) + " AND " +
-                                     "key = " + transaction.quote(key) + ";");
+                    std::string query("DELETE FROM " + transaction.esc(table_name) + "WHERE " +
+                                      "collection = " + transaction.quote(collection) + " AND " +
+                                      "key = " + transaction.quote(key) + ";");
+                    COCAINE_LOG_DEBUG(log, "executing {}", query);
+                    transaction.exec(query);
                     transaction.commit();
                     cb(make_ready_future());
-                } catch (...) {
-                    cb(make_exceptional_future<void>());
+                } catch (const std::exception& e) {
+                    COCAINE_LOG_ERROR(log, "error during index delete - {}", e.what());
+                    cb(make_exceptional_future<void>(make_error_code(error::unknown_pg_error), e.what()));
                 }
             });
         } catch(...) {
@@ -87,9 +103,11 @@ postgres_t::find(const std::string& collection, const std::vector<std::string>& 
             auto tag_string = boost::lexical_cast<std::string>(tags_obj);
 
             pqxx::work transaction(connection);
-            auto sql_result = transaction.exec("SELECT key FROM " + transaction.esc(table_name) + " WHERE " +
-                             "collection = " + transaction.quote(collection) + " AND " +
-                             "tags @> " + transaction.quote(tag_string) + ";");
+            std::string query("SELECT key FROM " + transaction.esc(table_name) + " WHERE " +
+                              "collection = " + transaction.quote(collection) + " AND " +
+                              "tags @> " + transaction.quote(tag_string) + ";");
+            COCAINE_LOG_DEBUG(log, "executing {}", query);
+            auto sql_result = transaction.exec(query);
 
             std::vector<std::string> result;
             for(const auto& row : sql_result) {
@@ -99,8 +117,9 @@ postgres_t::find(const std::string& collection, const std::vector<std::string>& 
             }
 
             cb(make_ready_future(std::move(result)));
-        } catch (...) {
-            cb(make_exceptional_future<std::vector<std::string>>());
+        } catch (const std::exception& e) {
+            COCAINE_LOG_ERROR(log, "error during index lookup - {}", e.what());
+            cb(make_exceptional_future<std::vector<std::string>>(make_error_code(error::unknown_pg_error), e.what()));
         }
     });
 }
