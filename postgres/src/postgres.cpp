@@ -15,6 +15,9 @@ namespace storage {
 postgres_t::postgres_t(context_t& context, const std::string& name, const dynamic_t& args) :
     api::storage_t(context, name, args),
     log(context.log("storage/postgres/" + name)),
+    collection_column_name(args.as_object().at("pg_collection_column", "collection").as_string()),
+    key_column_name(args.as_object().at("pg_key_column", "key").as_string()),
+    tags_column_name(args.as_object().at("pg_tags_column", "tags").as_string()),
     table_name(args.as_object().at("pg_table_name", "cocaine_index").as_string()),
     wrapped(api::storage(context, args.as_object().at("pg_underlying_storage", "core").as_string())),
     pg_pool(args.as_object().at("pg_pool_size", 1ul).as_uint(),
@@ -47,10 +50,15 @@ postgres_t::write(const std::string& collection,
                     dynamic_t tags_obj(tags);
                     auto tag_string = boost::lexical_cast<std::string>(tags_obj);
                     pqxx::work transaction(connection);
-                    std::string query("INSERT INTO " + transaction.esc(table_name) + "(collection, key, tags) VALUES(" +
-                                      transaction.quote(collection) + ", " +
-                                      transaction.quote(key) + ", " +
-                                      transaction.quote(tag_string) + ");");
+                    std::string query("INSERT INTO " + transaction.esc(table_name) + "(" +
+                                          transaction.esc(collection_column_name) + ", " +
+                                          transaction.esc(key_column_name) + ", " +
+                                          transaction.esc(tags_column_name) + ") " +
+                                      " VALUES(" +
+                                          transaction.quote(collection) + ", " +
+                                          transaction.quote(key) + ", " +
+                                          transaction.quote(tag_string) +
+                                      ");");
                     COCAINE_LOG_DEBUG(log, "executing {}", query);
                     transaction.exec(query);
                     transaction.commit();
@@ -76,8 +84,8 @@ postgres_t::remove(const std::string& collection, const std::string& key, callba
                 try {
                     pqxx::work transaction(connection);
                     std::string query("DELETE FROM " + transaction.esc(table_name) + "WHERE " +
-                                      "collection = " + transaction.quote(collection) + " AND " +
-                                      "key = " + transaction.quote(key) + ";");
+                                      transaction.esc(collection_column_name) + " = " + transaction.quote(collection) +
+                                      " AND " + transaction.esc(key_column_name) + " = " + transaction.quote(key) + ";");
                     COCAINE_LOG_DEBUG(log, "executing {}", query);
                     transaction.exec(query);
                     transaction.commit();
@@ -103,9 +111,12 @@ postgres_t::find(const std::string& collection, const std::vector<std::string>& 
             auto tag_string = boost::lexical_cast<std::string>(tags_obj);
 
             pqxx::work transaction(connection);
-            std::string query("SELECT key FROM " + transaction.esc(table_name) + " WHERE " +
-                              "collection = " + transaction.quote(collection) + " AND " +
-                              "tags @> " + transaction.quote(tag_string) + ";");
+            std::string query("SELECT " + transaction.esc(key_column_name) + " FROM " + transaction.esc(table_name) +
+                              " WHERE " +
+                                  transaction.esc(collection_column_name) + " = " + transaction.quote(collection) +
+                                  " AND " +
+                                  transaction.esc(tags_column_name) + " @> " + transaction.quote(tag_string) +
+                              ";");
             COCAINE_LOG_DEBUG(log, "executing {}", query);
             auto sql_result = transaction.exec(query);
 

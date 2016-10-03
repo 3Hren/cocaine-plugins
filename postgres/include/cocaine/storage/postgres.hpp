@@ -41,6 +41,9 @@ public:
      * pg_underlying_storage - name of wrapped storage fetched from context, default "core"
      * pg_pool_size - pg connection pool size, default 1
      * pg_connection_string - connection param for pg client
+     * pg_key_column - column name for storing key, default 'key'
+     * pg_collection_column - column name for storing collection, default 'collection'
+     * pg_tags_column - column name for storing tags in json, default 'tags'
      */
     postgres_t(context_t& context, const std::string& name, const dynamic_t& args);
 
@@ -70,6 +73,11 @@ public:
 
 private:
     std::shared_ptr<logging::logger_t> log;
+
+    std::string collection_column_name;
+    std::string key_column_name;
+    std::string tags_column_name;
+
     std::string table_name;
     api::storage_ptr wrapped;
     postgres::pool_t pg_pool;
