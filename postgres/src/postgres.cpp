@@ -58,7 +58,9 @@ postgres_t::write(const std::string& collection,
                                           transaction.quote(collection) + ", " +
                                           transaction.quote(key) + ", " +
                                           transaction.quote(tag_string) +
-                                      ");");
+                                      ") ON CONFLICT (key, collection) DO UPDATE SET " +
+                                          transaction.esc(tags_column_name) + " = " + transaction.quote(tag_string) +
+                                      ";");
                     COCAINE_LOG_DEBUG(log, "executing {}", query);
                     transaction.exec(query);
                     transaction.commit();
