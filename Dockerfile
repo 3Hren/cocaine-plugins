@@ -21,7 +21,8 @@ RUN cd /build/blackhole && \
     debi
 
 # Hack to cache plugins dependencies.
-RUN apt-get -qq install libarchive-dev uuid-dev libcgroup-dev libboost-filesystem-dev  libboost-thread-dev libnl-3-dev libnl-genl-3-dev libzookeeper-mt-dev
+RUN apt-get -qq install libarchive-dev uuid-dev libcgroup-dev libboost-filesystem-dev \
+    libboost-thread-dev libnl-3-dev libnl-genl-3-dev libzookeeper-mt-dev libpqxx-dev
 
 # Build and install cocaine-core.
 RUN git clone https://github.com/3Hren/cocaine-core --recursive -b v0.12.9 /build/cocaine-core
