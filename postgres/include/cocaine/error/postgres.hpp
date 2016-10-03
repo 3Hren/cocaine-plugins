@@ -12,15 +12,18 @@ enum postgres_errors {
 };
 
 struct postgres_category_t : public std::error_category {
-    constexpr static auto id() -> std::size_t {
+    constexpr static size_t
+    id() {
         return 0x40BC;
     }
 
-    auto name() const noexcept -> const char* {
+    const char*
+    name() const noexcept {
         return "postgres category";
     }
 
-    auto message(int ec) const noexcept -> std::string {
+    std::string
+    message(int ec) const noexcept {
         switch (ec) {
             case unknown_pg_error:
                 return "postgres error";
@@ -30,7 +33,7 @@ struct postgres_category_t : public std::error_category {
     }
 };
 
-auto make_error_code(postgres_errors err) -> std::error_code;
+std::error_code make_error_code(postgres_errors err);
 
 }  // namespace error
 }  // namespace cocaine

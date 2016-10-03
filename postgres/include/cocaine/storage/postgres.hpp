@@ -23,23 +23,35 @@
 
 namespace cocaine {
 namespace storage {
+
+/**
+ * This class provide a wrapper over storage to store index data.
+ * Real data is stored in the underlying storage,
+ * read requests are proxied to wrapped storage
+ * write requests are proxied to wrapped storage with empty taglist and tag data is stored in PG
+ **/
 class postgres_t : public api::storage_t {
 public:
     template<class T>
     using callback = std::function<void(std::future<T>)>;
 
+    /**
+     * construct a Postgres index wrapper. Param in args
+     * pg_table_name - table name to store indexes, default "cocaine_index"
+     * pg_underlying_storage - name of wrapped storage fetched from context, default "core"
+     * pg_pool_size - pg connection pool size, default 1
+     * pg_connection_string - connection param for pg client
+     */
     postgres_t(context_t& context, const std::string& name, const dynamic_t& args);
 
     using api::storage_t::read;
 
-    virtual
-    void
+    virtual void
     read(const std::string& collection, const std::string& key, callback<std::string> cb);
 
     using api::storage_t::write;
 
-    virtual
-    void
+    virtual void
     write(const std::string& collection,
           const std::string& key,
           const std::string& blob,
@@ -48,14 +60,12 @@ public:
 
     using api::storage_t::remove;
 
-    virtual
-    void
+    virtual void
     remove(const std::string& collection, const std::string& key, callback<void> cb);
 
     using api::storage_t::find;
 
-    virtual
-    void
+    virtual void
     find(const std::string& collection, const std::vector<std::string>& tags, callback<std::vector<std::string>> cb);
 
 private:

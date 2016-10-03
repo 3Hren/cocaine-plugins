@@ -23,7 +23,8 @@ pool_t::~pool_t() {
     slots->clear();
 }
 
-void pool_t::execute(std::function<void(pqxx::connection_base&)> function) {
+void
+pool_t::execute(std::function<void(pqxx::connection_base&)> function) {
     io_loop.post([=](){
         auto& slot = slots->at(std::this_thread::get_id());
         slot->execute(std::move(function));
@@ -41,15 +42,18 @@ pool_t::slot_t::~slot_t() {
     thread.join();
 }
 
-std::thread::id pool_t::slot_t::id() const {
+std::thread::id
+pool_t::slot_t::id() const {
     return thread.get_id();
 }
 
-void pool_t::slot_t::execute(std::function<void(pqxx::connection_base&)> function) {
+void
+pool_t::slot_t::execute(std::function<void(pqxx::connection_base&)> function) {
     function(*connection);
 }
 
-pool_t::slot_t::connection_ptr pool_t::slot_t::make_connection(const std::string& connection_string) {
+pool_t::slot_t::connection_ptr
+pool_t::slot_t::make_connection(const std::string& connection_string) {
     return connection_ptr(new pqxx::asyncconnection(connection_string));
 }
 

@@ -21,8 +21,9 @@
 
 using namespace cocaine;
 extern "C" {
-auto
-validation() -> api::preconditions_t {
+
+api::preconditions_t
+validation() {
     return api::preconditions_t{ COCAINE_VERSION };
 }
 

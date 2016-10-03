@@ -70,7 +70,7 @@ void
 postgres_t::remove(const std::string& collection, const std::string& key, callback<void> cb) {
     wrapped->remove(collection, key, [=](std::future<void> fut){
         try {
-            // First we check if underlying write succeed
+            // First we check if underlying remove succeed
             fut.get();
             pg_pool.execute([=](pqxx::connection_base& connection){
                 try {

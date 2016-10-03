@@ -20,7 +20,8 @@ public:
 
     ~pool_t();
 
-    void execute(std::function<void(pqxx::connection_base&)> function);
+    void
+    execute(std::function<void(pqxx::connection_base&)> function);
 
 private:
     class slot_t
@@ -31,11 +32,15 @@ private:
         slot_t(asio::io_service& _io_loop, const std::string& connection_string);
         ~slot_t();
 
-        std::thread::id id() const;
-        void execute(std::function<void(pqxx::connection_base&)> function);
+        std::thread::id
+        id() const;
+
+        void
+        execute(std::function<void(pqxx::connection_base&)> function);
 
     private:
-        connection_ptr make_connection(const std::string& connection_string);
+        connection_ptr
+        make_connection(const std::string& connection_string);
 
         connection_ptr connection;
         std::thread thread;
