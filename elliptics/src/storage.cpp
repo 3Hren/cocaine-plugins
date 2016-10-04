@@ -173,7 +173,7 @@ elliptics_storage_t::elliptics_storage_t(context_t &context, const std::string &
 
 void elliptics_storage_t::read(const std::string &collection, const std::string &key, callback<std::string> cb) {
 	auto result = m_read_latest ? async_read_latest(collection, key) : async_read(collection, key);
-	result.connect([=](const ell::sync_read_result& results, const ioremap::elliptics::error_info& error){
+	result.connect([=](const ell::sync_read_result& results, const ell::error_info& error){
 		if (error) {
 			auto e = std::system_error(-error.code(), std::generic_category(), error.message());
 			cb(make_exceptional_future<std::string>(e));
@@ -199,7 +199,7 @@ void elliptics_storage_t::write(const std::string &collection,
 )
 {
 	auto result = async_write(collection, key, blob, tags);
-	result.connect([=](const ell::sync_write_result& results, const ioremap::elliptics::error_info &error){
+	result.connect([=](const ell::sync_write_result& results, const ell::error_info &error){
 		if (error) {
 			auto e = std::system_error(-error.code(), std::generic_category(), error.message());
 			cb(make_exceptional_future<void>(e));
@@ -210,8 +210,8 @@ void elliptics_storage_t::write(const std::string &collection,
 }
 
 void elliptics_storage_t::find(const std::string &collection,
-							   const std::vector<std::string> &tags,
-							   callback<std::vector<std::string>> cb)
+	const std::vector<std::string> &tags,
+	callback<std::vector<std::string>> cb)
 {
 	auto ec = std::make_error_code(std::errc::not_supported);
 	auto msg = "elliptics indexes support has been dropped out - use pg wrapper instead";
@@ -221,7 +221,7 @@ void elliptics_storage_t::find(const std::string &collection,
 void elliptics_storage_t::remove(const std::string &collection, const std::string &key, callback<void> cb)
 {
 	auto result = async_remove(collection, key);
-	result.connect([=](const ell::sync_remove_result& results, const ioremap::elliptics::error_info &error){
+	result.connect([=](const ell::sync_remove_result& results, const ell::error_info &error){
 		if (error) {
 			auto e = std::system_error(-error.code(), std::generic_category(), error.message());
 			cb(make_exceptional_future<void>(e));
