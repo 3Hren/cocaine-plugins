@@ -54,7 +54,7 @@ public:
 
 	void read(const std::string &collection, const std::string &key, callback<std::string> cb);
 	void write(const std::string &collection, const std::string &key, const std::string &blob,
-			   const std::vector<std::string> &tags, callback<void> cb);
+		const std::vector<std::string> &tags, callback<void> cb);
 	void find(const std::string &collection, const std::vector<std::string> &tags, callback<std::vector<std::string>> cb);
 	void remove(const std::string &collection, const std::string &key, callback<void> cb);
 

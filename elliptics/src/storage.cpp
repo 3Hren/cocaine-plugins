@@ -174,13 +174,15 @@ elliptics_storage_t::elliptics_storage_t(context_t &context, const std::string &
 void elliptics_storage_t::read(const std::string &collection, const std::string &key, callback<std::string> cb) {
 	auto result = m_read_latest ? async_read_latest(collection, key) : async_read(collection, key);
 	result.connect([=](const ell::sync_read_result& results, const ioremap::elliptics::error_info& error){
-		if(error) {
+		if (error) {
 			auto e = std::system_error(-error.code(), std::generic_category(), error.message());
 			cb(make_exceptional_future<std::string>(e));
 		} else {
+			// this code mimics get_one sync call behaviour
 			for(const auto& r : results) {
 				if (r.status() == 0 && !r.data().empty()) {
 					cb(make_ready_future(r.file().to_string()));
+					return;
 				}
 			}
 			auto e = std::system_error(std::make_error_code(std::errc::invalid_argument), "no valid results found");
@@ -190,15 +192,15 @@ void elliptics_storage_t::read(const std::string &collection, const std::string 
 }
 
 void elliptics_storage_t::write(const std::string &collection,
-								const std::string &key,
-								const std::string &blob,
-								const std::vector<std::string> &tags,
-								callback<void> cb
+	const std::string &key,
+	const std::string &blob,
+	const std::vector<std::string> &tags,
+	callback<void> cb
 )
 {
 	auto result = async_write(collection, key, blob, tags);
 	result.connect([=](const ell::sync_write_result& results, const ioremap::elliptics::error_info &error){
-		if(error) {
+		if (error) {
 			auto e = std::system_error(-error.code(), std::generic_category(), error.message());
 			cb(make_exceptional_future<void>(e));
 		} else {
@@ -220,7 +222,7 @@ void elliptics_storage_t::remove(const std::string &collection, const std::strin
 {
 	auto result = async_remove(collection, key);
 	result.connect([=](const ell::sync_remove_result& results, const ioremap::elliptics::error_info &error){
-		if(error) {
+		if (error) {
 			auto e = std::system_error(-error.code(), std::generic_category(), error.message());
 			cb(make_exceptional_future<void>(e));
 		} else {
@@ -260,7 +262,6 @@ ell::async_write_result elliptics_storage_t::async_write(const std::string &coll
 	if (!tags.empty()) {
 		COCAINE_LOG_ERROR(m_log, "elliptics indexes are not supported, discarding tags");
 	}
-	using namespace std::placeholders;
 
 	COCAINE_LOG_DEBUG(m_log, "writing the '{}' object, collection: '{}'", key, collection);
 
@@ -271,22 +272,6 @@ ell::async_write_result elliptics_storage_t::async_write(const std::string &coll
 	session.set_checker(m_success_copies_num);
 
 	return session.write_data(key, blob, 0);
-}
-
-static void on_removing_index_finished(ell::async_result_handler<ell::callback_result_entry> handler,
-	ell::session session,
-	const std::string &key,
-	const ell::sync_update_indexes_result &,
-	const ell::error_info &err)
-{
-	using namespace std::placeholders;
-
-	if (err) {
-		handler.complete(err);
-		return;
-	}
-
-	session.remove(key).connect(handler);
 }
 
 ell::async_remove_result elliptics_storage_t::async_remove(const std::string &collection, const std::string &key)
