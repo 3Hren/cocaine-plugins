@@ -44,10 +44,88 @@
 #include <boost/spirit/include/karma_list.hpp>
 #include <boost/spirit/include/karma_string.hpp>
 
+#include "cocaine/service/node/overseer.hpp"
+
 using namespace cocaine;
 using namespace cocaine::service;
 
+using cocaine::service::node::overseer_t;
+
 namespace ph = std::placeholders;
+
+class control_slot_t:
+    public io::basic_slot<io::node::control_app>
+{
+    struct controlling_slot_t:
+        public io::basic_slot<io::node::control_app>::dispatch_type
+    {
+        typedef io::basic_slot<io::node::control_app>::dispatch_type super;
+
+        typedef io::event_traits<io::node::control_app>::dispatch_type dispatch_type;
+        typedef io::protocol<dispatch_type>::scope protocol;
+
+        control_slot_t* p;
+        std::shared_ptr<overseer_t> overseer;
+
+        controlling_slot_t(const std::string& name, control_slot_t* p_):
+            super("controlling"),
+            p(p_)
+        {
+            overseer = p->parent.overseer(name);
+            if (overseer == nullptr) {
+                throw cocaine::error_t("!");
+            }
+
+            on<protocol::chunk>([&](int size) {
+                overseer->failover(size);
+            });
+
+            p->locked.store(true);
+        }
+
+        ~controlling_slot_t() {
+            p->locked.store(false);
+        }
+
+        virtual
+        void
+        discard(const std::error_code&) const {
+            overseer->failover(0);
+        }
+    };
+
+    typedef std::vector<hpack::header_t> meta_type;
+    typedef std::shared_ptr<const io::basic_slot<io::node::control_app>::dispatch_type> result_type;
+
+    std::atomic<bool> locked;
+    node_t& parent;
+
+public:
+    control_slot_t(node_t& parent):
+        locked(false),
+        parent(parent)
+    {}
+
+    boost::optional<result_type>
+    operator()(tuple_type&& args, upstream_type&& upstream) {
+        return operator()({}, std::move(args), std::move(upstream));
+    }
+
+    boost::optional<result_type>
+    operator()(const meta_type&, tuple_type&& args, upstream_type&& upstream) {
+        typedef io::protocol<io::event_traits<io::node::control_app>::upstream_type>::scope protocol;
+
+        const auto dispatch = tuple::invoke(std::move(args), [&](const std::string& name) -> result_type {
+            if (locked) {
+                upstream.send<protocol::error>(std::make_error_code(std::errc::resource_unavailable_try_again));
+                return nullptr;
+            }
+            return std::make_shared<controlling_slot_t>(name, this);
+        });
+
+        return boost::make_optional(dispatch);
+    }
+};
 
 node_t::node_t(context_t& context, asio::io_service& asio, const std::string& name, const dynamic_t& args):
     category_type(context, asio, name, args),
@@ -55,8 +133,11 @@ node_t::node_t(context_t& context, asio::io_service& asio, const std::string& na
     log(context.log(name)),
     context(context)
 {
-    on<io::node::start_app>(std::bind(&node_t::start_app, this, ph::_1, ph::_2));
+    on<io::node::start_app>([&](const std::string& name, const std::string& profile) {
+        start_app(name, profile);
+    });
     on<io::node::pause_app>(std::bind(&node_t::pause_app, this, ph::_1));
+    on<io::node::control_app>(std::make_shared<control_slot_t>(*this));
     on<io::node::list>     (std::bind(&node_t::list, this));
     on<io::node::info>     (std::bind(&node_t::info, this, ph::_1, ph::_2));
 
@@ -139,7 +220,7 @@ deferred<void>
 node_t::start_app(const std::string& name, const std::string& profile) {
     COCAINE_LOG_DEBUG(log, "processing `start_app` request, app: '{}'", name);
 
-    cocaine::deferred<void> deferred;
+    struct deferred<void> deferred;
 
     apps.apply([&](std::map<std::string, std::shared_ptr<node::app_t>>& apps) {
         auto it = apps.find(name);
@@ -150,7 +231,7 @@ node_t::start_app(const std::string& name, const std::string& profile) {
                 cocaine::format("app '{}' is {}", name, info["state"].as_string()));
         }
 
-        apps.insert({ name, std::make_shared<node::app_t>(context, name, profile, deferred) });
+        apps.insert({name, std::make_shared<node::app_t>(context, name, profile, deferred)});
     });
 
     return deferred;

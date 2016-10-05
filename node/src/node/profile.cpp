@@ -74,6 +74,14 @@ profile_t::profile_t(context_t& context, const std::string& name_):
     }
 }
 
+auto profile_t::publish_on() const -> std::uint32_t {
+    return this->as_object().at("publish-on", 0u).as_uint();
+}
+
+auto profile_t::unpublish_under() const -> std::uint32_t {
+    return this->as_object().at("unpublish-under", 0u).as_uint();
+}
+
 unsigned long
 profile_t::request_timeout() const {
     return static_cast<uint64_t>(1000 * as_object().at("request-timeout", 86400.0f).to<double>());

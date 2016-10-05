@@ -17,6 +17,8 @@
 #include "cocaine/detail/service/node/slave/load.hpp"
 #include "cocaine/detail/service/node/stats.hpp"
 
+#include "node/pool_observer.hpp"
+
 namespace cocaine {
 namespace detail {
 namespace service {
@@ -24,6 +26,7 @@ namespace node {
 
 using cocaine::service::node::app::event_t;
 using cocaine::service::node::slave::id_t;
+using cocaine::service::node::pool_observer;
 
 using slave::control_t;
 using slave::load_t;
@@ -61,6 +64,8 @@ public:
     std::chrono::system_clock::time_point last_failed;
     std::chrono::seconds last_timeout;
 
+    pool_observer& observer;
+
     /// Pending queue.
     synchronized<queue_type> queue;
 
@@ -68,10 +73,15 @@ public:
     stats_t stats;
 
 public:
-    engine_t(context_t& context, manifest_t manifest, profile_t profile,
+    engine_t(context_t& context,
+             manifest_t manifest,
+             profile_t profile,
+             pool_observer& observer,
              std::shared_ptr<asio::io_service> loop);
 
     ~engine_t();
+
+    auto active_workers() const -> std::uint32_t;
 
     /// Returns copy of the current manifest.
     ///
