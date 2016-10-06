@@ -429,7 +429,7 @@ public:
         }
 
         if (context.locate(name)) {
-            info["state"] = format("running (published)");
+            info["state"] = "running (published)";
         } else {
             info["state"] = "running (unpublished)";
         }
