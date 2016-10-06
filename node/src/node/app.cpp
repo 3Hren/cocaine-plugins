@@ -45,6 +45,7 @@ struct overseer_proxy_t {
 };
 
 // While the client is connected it's okay, balance on numbers depending on received.
+// TODO: Drop when all scripts will be rewritten.
 class control_slot_t:
     public io::basic_slot<io::app::control>
 {
@@ -64,15 +65,9 @@ class control_slot_t:
         {
             on<protocol::chunk>([&](int size) {
                 if (auto overseer = p->overseer.lock()) {
-                    overseer->o->failover(size);
+                    overseer->o->control_population(size);
                 }
             });
-
-            p->locked.store(true);
-        }
-
-        ~controlling_slot_t() {
-            p->locked.store(false);
         }
 
         virtual
@@ -80,7 +75,7 @@ class control_slot_t:
         discard(const std::error_code&) const {
             COCAINE_LOG_DEBUG(p->log, "client has been disappeared, assuming direct control");
             if (auto overseer = p->overseer.lock()) {
-                overseer->o->failover(0);
+                overseer->o->control_population(0);
             }
         }
     };
@@ -89,13 +84,11 @@ class control_slot_t:
     typedef std::shared_ptr<const io::basic_slot<io::app::control>::dispatch_type> result_type;
 
     const std::unique_ptr<logging::logger_t> log;
-    std::atomic<bool> locked;
     std::weak_ptr<overseer_proxy_t> overseer;
 
 public:
     control_slot_t(std::shared_ptr<overseer_proxy_t> overseer_, std::unique_ptr<logging::logger_t> log_):
         log(std::move(log_)),
-        locked(false),
         overseer(overseer_)
     {
         COCAINE_LOG_DEBUG(log, "control slot has been created");
@@ -111,14 +104,8 @@ public:
     }
 
     boost::optional<result_type>
-    operator()(const meta_type&, tuple_type&& args, upstream_type&& upstream) {
-        typedef io::protocol<io::event_traits<io::app::control>::upstream_type>::scope protocol;
-
+    operator()(const meta_type&, tuple_type&& args, upstream_type&&) {
         const auto dispatch = tuple::invoke(std::move(args), [&]() -> result_type {
-            if (locked) {
-                upstream.send<protocol::error>(std::make_error_code(std::errc::resource_unavailable_try_again));
-                return nullptr;
-            }
             return std::make_shared<controlling_slot_t>(this);
         });
 
@@ -408,13 +395,14 @@ public:
     virtual auto spawned() -> void {
         try {
             maybe_publish();
-        } catch (const std::exception&) {}
+        } catch (const std::exception&) {
+            // Probably if we are here than an application is already published earlier. There is
+            // no need to notify anyone about it over and over again.
+        }
     }
 
     virtual auto despawned() -> void {
-        try {
-            maybe_unpublish();
-        } catch (const std::exception&) {}
+        maybe_unpublish();
     }
 
     virtual
@@ -428,11 +416,8 @@ public:
             info["uptime"] = overseer()->uptime().count();
         }
 
-        if (context.locate(name)) {
-            info["state"] = "running (published)";
-        } else {
-            info["state"] = "running (unpublished)";
-        }
+        info["state"] = "running";
+        info["publushed"] = context.locate(name) != boost::none;
         return info;
     }
 

@@ -77,7 +77,15 @@ engine_t::~engine_t() {
 }
 
 auto engine_t::active_workers() const -> std::uint32_t {
-    return pool->size();
+    return pool.apply([&](const pool_type& pool) -> std::uint32_t {
+        std::uint32_t active = 0;
+        for (const auto& kv : pool) {
+            if (kv.second.active()) {
+                ++active;
+            }
+        }
+        return active;
+    });
 }
 
 manifest_t
@@ -339,7 +347,7 @@ auto engine_t::uptime() const -> std::chrono::seconds {
     return std::chrono::duration_cast<std::chrono::seconds>(now - birthstamp);
 }
 
-auto engine_t::failover(int count) -> void {
+auto engine_t::control_population(int count) -> void {
     count = std::max(0, count);
     COCAINE_LOG_DEBUG(log, "changed keep-alive slave count to {}", count);
 

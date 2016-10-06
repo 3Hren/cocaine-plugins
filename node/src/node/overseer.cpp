@@ -27,7 +27,7 @@ overseer_t::~overseer_t() {
     COCAINE_LOG_DEBUG(engine->log, "overseer is processing terminate request");
 
     engine->stopped = true;
-    engine->failover(0);
+    engine->control_population(0);
     engine->pool->clear();
     engine->on_spawn_rate_timer->reset();
 }
@@ -52,8 +52,8 @@ auto overseer_t::uptime() const -> std::chrono::seconds {
     return engine->uptime();
 }
 
-auto overseer_t::failover(int count) -> void {
-    return engine->failover(count);
+auto overseer_t::control_population(int count) -> void {
+    return engine->control_population(count);
 }
 
 auto overseer_t::enqueue(upstream<io::stream_of<std::string>::tag> downstream, app::event_t event,

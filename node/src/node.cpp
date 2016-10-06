@@ -68,41 +68,33 @@ class control_slot_t:
         std::shared_ptr<overseer_t> overseer;
 
         controlling_slot_t(const std::string& name, control_slot_t* p_):
-            super("controlling"),
+            super(format("controlling/{}", name)),
             p(p_)
         {
             overseer = p->parent.overseer(name);
             if (overseer == nullptr) {
-                throw cocaine::error_t("!");
+                throw cocaine::error_t("app '{}' is not available");
             }
 
             on<protocol::chunk>([&](int size) {
-                overseer->failover(size);
+                overseer->control_population(size);
             });
-
-            p->locked.store(true);
-        }
-
-        ~controlling_slot_t() {
-            p->locked.store(false);
         }
 
         virtual
         void
         discard(const std::error_code&) const {
-            overseer->failover(0);
+            overseer->control_population(0);
         }
     };
 
     typedef std::vector<hpack::header_t> meta_type;
     typedef std::shared_ptr<const io::basic_slot<io::node::control_app>::dispatch_type> result_type;
 
-    std::atomic<bool> locked;
     node_t& parent;
 
 public:
-    control_slot_t(node_t& parent):
-        locked(false),
+    explicit control_slot_t(node_t& parent):
         parent(parent)
     {}
 
@@ -112,14 +104,8 @@ public:
     }
 
     boost::optional<result_type>
-    operator()(const meta_type&, tuple_type&& args, upstream_type&& upstream) {
-        typedef io::protocol<io::event_traits<io::node::control_app>::upstream_type>::scope protocol;
-
+    operator()(const meta_type&, tuple_type&& args, upstream_type&&) {
         const auto dispatch = tuple::invoke(std::move(args), [&](const std::string& name) -> result_type {
-            if (locked) {
-                upstream.send<protocol::error>(std::make_error_code(std::errc::resource_unavailable_try_again));
-                return nullptr;
-            }
             return std::make_shared<controlling_slot_t>(name, this);
         });
 
@@ -133,13 +119,11 @@ node_t::node_t(context_t& context, asio::io_service& asio, const std::string& na
     log(context.log(name)),
     context(context)
 {
-    on<io::node::start_app>([&](const std::string& name, const std::string& profile) {
-        start_app(name, profile);
-    });
+    on<io::node::start_app>(std::bind(&node_t::start_app, this, ph::_1, ph::_2));
     on<io::node::pause_app>(std::bind(&node_t::pause_app, this, ph::_1));
-    on<io::node::control_app>(std::make_shared<control_slot_t>(*this));
     on<io::node::list>     (std::bind(&node_t::list, this));
     on<io::node::info>     (std::bind(&node_t::info, this, ph::_1, ph::_2));
+    on<io::node::control_app>(std::make_shared<control_slot_t>(*this));
 
     // Context signal/slot.
     signal = std::make_shared<dispatch<io::context_tag>>(name);

@@ -133,7 +133,7 @@ public:
     /// Tries to keep alive at least `count` workers no matter what.
     ///
     /// Zero value is allowed and means not to spawn workers
-    auto failover(int count) -> void;
+    auto control_population(int count) -> void;
 
     /// Creates a new handshake dispatch, which will be consumed after a new incoming connection
     /// attached.
