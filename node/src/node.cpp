@@ -73,7 +73,7 @@ class control_slot_t:
         {
             overseer = p->parent.overseer(name);
             if (overseer == nullptr) {
-                throw cocaine::error_t("app '{}' is not available");
+                throw cocaine::error_t("app '{}' is not available", name);
             }
 
             on<protocol::chunk>([&](int size) {
