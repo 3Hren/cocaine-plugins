@@ -76,6 +76,10 @@ profile_t::profile_t(context_t& context, const std::string& name_):
     if (publish_on() > pool_limit) {
         throw cocaine::error_t("publish threshold must not be greater than pool limit");
     }
+
+    if (publish_on() < unpublish_under()) {
+        throw cocaine::error_t("publish threshold must not be less than unpublish one");
+    }
 }
 
 auto profile_t::publish_on() const -> std::uint32_t {
