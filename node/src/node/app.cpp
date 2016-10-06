@@ -417,7 +417,7 @@ public:
         }
 
         info["state"] = "running";
-        info["publushed"] = !(context.locate(name) == boost::none);
+        info["publushed"] = static_cast<bool>(context.locate(name));
         return info;
     }
 
