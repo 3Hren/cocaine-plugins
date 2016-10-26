@@ -6,7 +6,9 @@ INCLUDE_DIRECTORIES(
 LOCATE_LIBRARY(libpqxx "pqxx/version.hxx" "pqxx")
 
 ADD_LIBRARY(runtime MODULE
-        src/service/runtime.cpp
+        src/api/sender.cpp
+        src/sender/postgres.cpp
+        src/service/metrics.cpp
         src/module.cpp
         ../postgres/src/pool.cpp
         )

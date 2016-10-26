@@ -13,23 +13,27 @@
 * GNU General Public License for more details.
 */
 
+#include "cocaine/api/sender.hpp"
+#include "cocaine/repository/sender.hpp"
+#include "cocaine/sender/null.hpp"
+#include "cocaine/sender/postgres.hpp"
+#include "cocaine/service/metrics.hpp"
+
 #include <cocaine/api/service.hpp>
 #include <cocaine/repository.hpp>
 #include <cocaine/repository/service.hpp>
 
-#include "cocaine/service/runtime.hpp"
-
 using namespace cocaine;
 extern "C" {
 
-api::preconditions_t
-validation() {
+auto validation() -> api::preconditions_t {
     return api::preconditions_t{ COCAINE_VERSION };
 }
 
-void
-initialize(api::repository_t& repository) {
-    repository.insert<service::runtime_t>("runtime_ng");
+auto initialize(api::repository_t& repository) -> void {
+    repository.insert<service::metrics_t>("metrics");
+    repository.insert<sender::pg_sender_t>("postgres");
+    repository.insert<sender::null_sender_t>("null");
 }
 
 }
