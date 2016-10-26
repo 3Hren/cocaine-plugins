@@ -242,3 +242,22 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, libpqxx-dev
 Description: Storage and index support based on postgress (cocaine plugin includes)
  Storage and index support based on postgress.
+
+Package: libcocaine-plugin-metrics3
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libpqxx-4.0
+Description: Metrics proxy and sending service (cocaine plugin)
+ Service for serving current metrics via cocaine protocol and pushing them outside by timer.
+
+Package: libcocaine-plugin-metrics-dbg
+Architecture: any
+Depends: ${misc:Depends}
+Description: Metrics proxy and sending service (cocaine plugin debug files)
+ Service for serving current metrics via cocaine protocol and pushing them outside by timer.
+
+Package: libcocaine-plugin-metrics-dev
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libpqxx-dev
+Description: Metrics proxy and sending service (cocaine plugin includes)
+ Service for serving current metrics via cocaine protocol and pushing them outside by timer.
+
