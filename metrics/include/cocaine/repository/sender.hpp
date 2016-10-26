@@ -1,6 +1,6 @@
 /*
     Copyright (c) 2016+ Anton Matveenko <antmat@me.com>
-    Copyright (c) 2011-2014 Other contributors as noted in the AUTHORS file.
+    Copyright (c) 2016+ Other contributors as noted in the AUTHORS file.
 
     This file is part of Cocaine.
 
