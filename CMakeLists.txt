@@ -22,7 +22,7 @@ OPTION(NODE "Build Node service plugin" ON)
 OPTION(POSTGRES "Build Postgress index storage plugin" ON)
 OPTION(URLFETCH "Build URLFetch Service plugin" ON)
 OPTION(UNICORN "Build Unified configuration service plugin" ON)
-OPTION(RUNTIME "Build runtime service plugin" ON)
+OPTION(METRICS "Build metrics service plugin" ON)
 
 # Include our CMake libraries.
 INCLUDE(cmake/locate_library.cmake)
@@ -67,7 +67,7 @@ SET(PLUGINS
     postgres
     unicorn
     urlfetch
-    runtime
+    metrics
 )
 
 IF("${CMAKE_SHARED_LIBRARY_SUFFIX}" STREQUAL "")

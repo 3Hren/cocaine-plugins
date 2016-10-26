@@ -23,7 +23,7 @@ SET_TARGET_PROPERTIES(postgres PROPERTIES
 
 INSTALL(TARGETS postgres
         LIBRARY DESTINATION lib/cocaine
-        COMPONENT runtime)
+        COMPONENT metrics)
 
 INSTALL(
         DIRECTORY

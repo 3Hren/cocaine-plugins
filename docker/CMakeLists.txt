@@ -29,4 +29,4 @@ SET_TARGET_PROPERTIES(docker PROPERTIES
 INSTALL(
     TARGETS docker
     LIBRARY DESTINATION lib/cocaine
-    COMPONENT runtime)
+    COMPONENT metrics)

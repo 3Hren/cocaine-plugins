@@ -36,7 +36,7 @@ struct profile_t : cached<dynamic_t> {
     // The profile name.
     std::string name;
 
-    // Copy all the slave output to the runtime log.
+    // Copy all the slave output to the metrics log.
     bool log_output;
 
     // Timeouts.

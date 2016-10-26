@@ -29,5 +29,5 @@ IF(MongoDB_FOUND)
 
     INSTALL(TARGETS mongodb
         LIBRARY DESTINATION lib/cocaine
-        COMPONENT runtime)
+        COMPONENT metrics)
 ENDIF(MongoDB_FOUND)

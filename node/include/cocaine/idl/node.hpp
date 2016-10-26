@@ -69,7 +69,7 @@ struct info {
     }
 
     typedef option_of<
-     /* Various runtime information about the running app. */
+     /* Various metrics information about the running app. */
         dynamic_t
     >::tag upstream_type;
 };
@@ -184,7 +184,7 @@ struct info {
     >::type argument_type;
 
     typedef option_of<
-     /* Various runtime information about the running app. */
+     /* Various metrics information about the running app. */
         dynamic_t
     >::tag upstream_type;
 };

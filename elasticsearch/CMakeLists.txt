@@ -28,7 +28,7 @@ SET_TARGET_PROPERTIES(elasticsearch PROPERTIES
 
 INSTALL(TARGETS elasticsearch
     LIBRARY DESTINATION lib/cocaine
-    COMPONENT runtime)
+    COMPONENT metrics)
 
 INSTALL(
     DIRECTORY
