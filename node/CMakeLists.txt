@@ -110,7 +110,7 @@ set_target_properties(isolate_mock PROPERTIES
 
 install(TARGETS ${PLUGIN_NAME}
     LIBRARY DESTINATION lib/cocaine
-    COMPONENT metrics)
+    COMPONENT runtime)
 
 install(
     DIRECTORY

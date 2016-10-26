@@ -19,5 +19,5 @@ ELSE()
 
     INSTALL(TARGETS ipvs-gateway
         LIBRARY DESTINATION lib/cocaine
-        COMPONENT metrics)
+        COMPONENT runtime)
 ENDIF()
