@@ -36,7 +36,7 @@ public:
 private:
     void on_send_timer(const std::error_code& ec);
 
-    boost::posix_time::milliseconds send_period;
+    boost::posix_time::seconds send_period;
     asio::deadline_timer send_timer;
     std::unique_ptr<sender_t> sender;
 };

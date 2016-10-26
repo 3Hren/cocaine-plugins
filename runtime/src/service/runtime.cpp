@@ -21,28 +21,38 @@ namespace service {
 
 class pg_sender_t : public runtime_t::sender_t {
 public:
-    pg_sender_t(std::unique_ptr<postgres::pool_t> _pool, std::string _hostname, std::unique_ptr<blackhole::logger_t> _logger):
+    pg_sender_t(std::unique_ptr<postgres::pool_t> _pool,
+                std::string _hostname,
+                std::string _table_name,
+                std::unique_ptr<blackhole::logger_t> _logger):
         pool(std::move(_pool)),
         hostname(std::move(_hostname)),
+        table_name(std::move(_table_name)),
         logger(std::move(_logger))
     {}
 
     virtual auto send(const dynamic_t& data) -> void {
         pool->execute([=](pqxx::connection_base& connection){
-            auto data_string = boost::lexical_cast<std::string>(data);
+            try {
+                auto data_string = boost::lexical_cast<std::string>(data);
 
-            pqxx::work transaction(connection);
-            auto query = cocaine::format("INSERT INTO metrics (ts, host, data) VALUES(now(), {}, {});",
-                                         transaction.quote(hostname),
-                                         transaction.quote(data_string));
-            COCAINE_LOG_DEBUG(logger, "executing {}", query);
-            auto sql_result = transaction.exec(query);
-            transaction.commit();
+                pqxx::work transaction(connection);
+                auto query = cocaine::format("INSERT INTO {} (ts, host, data) VALUES(now(), {}, {});",
+                                             transaction.esc(table_name),
+                                             transaction.quote(hostname),
+                                             transaction.quote(data_string));
+                COCAINE_LOG_DEBUG(logger, "executing {}", query);
+                auto sql_result = transaction.exec(query);
+                transaction.commit();
+            } catch (const std::exception& e) {
+                COCAINE_LOG_ERROR(logger, "metric sending failed - {}", e.what());
+            }
         });
     }
 private:
     std::unique_ptr<postgres::pool_t> pool;
     std::string hostname;
+    std::string table_name;
     std::unique_ptr<blackhole::logger_t> logger;
 };
 
@@ -53,7 +63,7 @@ runtime_t::runtime_t(context_t& context,
     api::service_t(context, asio, name, args),
     dispatch<io::runtime_tag>(name),
     hub(context.metrics_hub()),
-    send_period(args.as_object().at("send_period_ms", 0u).as_uint()),
+    send_period(args.as_object().at("pg_send_period_s", 0u).as_uint()),
     send_timer(asio)
 {
     if(send_period.ticks() != 0) {
@@ -62,6 +72,7 @@ runtime_t::runtime_t(context_t& context,
                                  args.as_object().at("pg_conn_string", "").as_string()));
         sender = std::unique_ptr<sender_t>(new pg_sender_t(std::move(pool),
                                                            context.config().network().hostname(),
+                                                           args.as_object().at("pg_table_name", "cocaine_metrics").as_string(),
                                                            context.log("runtime/pg_sender")));
         send_timer.expires_from_now(send_period);
         send_timer.async_wait(std::bind(&runtime_t::on_send_timer, this, std::placeholders::_1));
