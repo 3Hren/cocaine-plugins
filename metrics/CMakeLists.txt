@@ -31,3 +31,8 @@ INSTALL(TARGETS metrics-plugin
         LIBRARY DESTINATION lib/cocaine
         COMPONENT runtime)
 
+INSTALL(
+        DIRECTORY
+        include/cocaine/idl
+        DESTINATION include/cocaine
+        COMPONENT development)
