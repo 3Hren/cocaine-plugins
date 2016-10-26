@@ -26,7 +26,7 @@ enum slave_errors {
 
     /// The slave has failed to activate for a timeout.activate ms.
     ///
-    /// A slave is considered active when is sends a handshake message and the metrics receives it.
+    /// A slave is considered active when is sends a handshake message and the runtime receives it.
     activate_timeout,
 
     /// The slave has failed to activate, because of some errors.
@@ -44,7 +44,7 @@ enum slave_errors {
     /// The operation cannot be completed, because the slave is in invalid state.
     invalid_state,
 
-    /// Unexpected IPC error occurred between the metrics and worker.
+    /// Unexpected IPC error occurred between the runtime and worker.
     ///
     /// In this case we cannot control the worker anymore, so the only way to handle this error - is
     /// to mark the worker as broken and to terminate it using TERM or KILL signals.
