@@ -38,9 +38,16 @@ public:
                 const dynamic_t& args);
 
 private:
+    enum class policy_t {
+        continous,
+        update,
+        gc
+    };
     auto on_send_timer(const std::error_code& ec) -> void;
+    auto on_gc_timer(const std::error_code& ec) -> void;
     auto send(dynamic_t data) -> void;
 
+    policy_t policy;
     data_provider_ptr data_provider;
     std::unique_ptr<postgres::pool_t> pool;
     std::string hostname;
@@ -48,6 +55,9 @@ private:
     std::unique_ptr<blackhole::logger_t> logger;
     boost::posix_time::seconds send_period;
     asio::deadline_timer send_timer;
+    asio::deadline_timer gc_timer;
+    boost::posix_time::seconds gc_period;
+    boost::posix_time::seconds gc_ttl;
 };
 
 }
