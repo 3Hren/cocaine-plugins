@@ -20,7 +20,7 @@
 
 #pragma once
 
-#include "cocaine/api/isolate.hpp"
+#include "cocaine/api/sender.hpp"
 
 #include <cocaine/common.hpp>
 #include <cocaine/locked_ptr.hpp>
