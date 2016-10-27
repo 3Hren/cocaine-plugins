@@ -73,7 +73,7 @@ auto pg_sender_t::on_gc_timer(const std::error_code& ec) -> void {
             try {
                 pqxx::work transaction(connection);
                 auto query = cocaine::format("DELETE FROM {} WHERE ts < now()-interval '{} seconds';",
-                                             transaction.esc(table_name), gc_ttl.seconds());
+                                             transaction.esc(table_name), gc_ttl.total_seconds());
                 COCAINE_LOG_DEBUG(logger, "executing {}", query);
                 auto sql_result = transaction.exec(query);
                 transaction.commit();

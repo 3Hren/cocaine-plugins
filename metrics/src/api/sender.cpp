@@ -33,7 +33,7 @@ auto sender(context_t& context,
        const std::string& name,
        sender_t::data_provider_ptr data_provider) -> sender_ptr
 {
-    auto sender = context.config().component("senders").get(name);
+    auto sender = context.config().component_group("senders").get(name);
     if(!sender) {
         throw error_t(std::errc::argument_out_of_domain, "sender component with name '{}' not found", name);
     }
