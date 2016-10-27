@@ -49,7 +49,7 @@ public:
 
 private:
     metrics::registry_t& hub;
-    api::sender_ptr sender;
+    std::vector<api::sender_ptr> senders;
 };
 
 }  // namespace service

@@ -26,14 +26,17 @@ metrics_t::metrics_t(context_t& context,
     api::service_t(context, asio, _name, args),
     dispatch<io::metrics_tag>(_name),
     hub(context.metrics_hub()),
-    sender()
+    senders()
 {
-    auto sender_name = args.as_object().at("sender", "core").as_string();
 
-    api::sender_t::data_provider_ptr provider(new api::sender_t::function_data_provider_t([=](){
-        return metrics();
-    }));
-    sender = api::sender(context, asio, sender_name, std::move(provider));
+    auto sender_names = args.as_object().at("senders", dynamic_t::empty_array).as_array();
+
+    for(auto& sender_name: sender_names) {
+        api::sender_t::data_provider_ptr provider(new api::sender_t::function_data_provider_t([=]() {
+            return metrics();
+        }));
+        senders.push_back(api::sender(context, asio, sender_name.as_string(), std::move(provider)));
+    }
 
     on<io::metrics::fetch>([&]() -> dynamic_t {
         return metrics();
