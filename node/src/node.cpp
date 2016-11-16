@@ -55,7 +55,7 @@ namespace {
 class control_slot_t:
     public io::basic_slot<io::node::control_app>
 {
-    struct controlling_slot_t:
+    struct dispatch_t:
         public io::basic_slot<io::node::control_app>::dispatch_type
     {
         typedef io::basic_slot<io::node::control_app>::dispatch_type super;
@@ -65,12 +65,12 @@ class control_slot_t:
 
         std::shared_ptr<overseer_t> overseer;
 
-        controlling_slot_t(const std::string& name, control_slot_t* p):
+        dispatch_t(const std::string& name, control_slot_t* p):
             super(format("controlling/{}", name))
         {
             overseer = p->parent.overseer(name);
             if (overseer == nullptr) {
-                throw cocaine::error_t("app '{}' is not available", name);
+                throw cocaine::error_t("app is not available");
             }
 
             on<protocol::chunk>([&](int size) {
@@ -78,9 +78,8 @@ class control_slot_t:
             });
         }
 
-        virtual
         void
-        discard(const std::error_code&) const {
+        discard(const std::error_code&) const override {
             overseer->control_population(0);
         }
     };
@@ -103,7 +102,7 @@ public:
     boost::optional<result_type>
     operator()(const meta_type&, tuple_type&& args, upstream_type&&) {
         const auto dispatch = tuple::invoke(std::move(args), [&](const std::string& name) -> result_type {
-            return std::make_shared<controlling_slot_t>(name, this);
+            return std::make_shared<dispatch_t>(name, this);
         });
 
         return boost::make_optional(dispatch);
