@@ -284,20 +284,3 @@ node_t::overseer(const std::string& name) const {
 
     return app->overseer();
 }
-
-// boost::optional<io::dispatch_ptr_t>
-// node_t::process(const io::decoder_t::message_type& message, const io::upstream_ptr_t& upstream) const {
-//     // Auth - give service name on construction + dispatch map. Internally uses global auth
-//     // component.
-//     // switch (auth->check_permissions(message)) {
-//     // case auth_t::permission_t::allow:
-//         return dispatch::process(message, upstream);
-//     // default:
-//         // TODO: If upstream_type is `optional` -> send error.
-//         // If `stream` - send error.
-//         // Otherwise implement your own error-notification logic.
-//         // upstream->send<wat?>(...);
-//     // }
-//
-//     // return boost::none;
-// }
