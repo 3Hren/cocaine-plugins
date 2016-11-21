@@ -30,7 +30,7 @@ void initialize(cocaine::api::repository_t& repository) {
     repository.insert<isolate::external_t>("docker");
     repository.insert<isolate::external_t>("porto");
 
-    repository.insert<auth::anonymous_t>("anonymous");
+    repository.insert<auth::promiscuous_t>("promiscuous");
 
     error::registrar::add(error::node_category(), error::node_category_id);
     error::registrar::add(error::slave_category(), error::slave_category_id);

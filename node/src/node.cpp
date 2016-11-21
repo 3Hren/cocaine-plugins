@@ -41,6 +41,7 @@
 #include <boost/range/adaptor/map.hpp>
 #include <boost/range/algorithm/copy.hpp>
 
+#include "cocaine/middleware/auth.hpp"
 #include "cocaine/service/node/overseer.hpp"
 
 using namespace cocaine;
@@ -101,6 +102,7 @@ public:
 
     boost::optional<result_type>
     operator()(const meta_type&, tuple_type&& args, upstream_type&&) {
+        // TODO: Call middlewares manually. Catch exceptions, send error manually, everything manually.
         const auto dispatch = tuple::invoke(std::move(args), [&](const std::string& name) -> result_type {
             return std::make_shared<dispatch_t>(name, this);
         });
@@ -117,7 +119,9 @@ node_t::node_t(context_t& context, asio::io_service& asio, const std::string& na
     log(context.log(name)),
     context(context)
 {
-    on<io::node::start_app>(std::bind(&node_t::start_app, this, ph::_1, ph::_2));
+    on<io::node::start_app>()
+        .execute(std::bind(&node_t::start_app, this, ph::_1, ph::_2))
+        .add_middleware(middleware::auth_t(context, name));
     on<io::node::pause_app>(std::bind(&node_t::pause_app, this, ph::_1));
     on<io::node::list>     (std::bind(&node_t::list, this));
     on<io::node::info>     (std::bind(&node_t::info, this, ph::_1, ph::_2));
@@ -236,7 +240,6 @@ node_t::pause_app(const std::string& name) {
 auto
 node_t::list() const -> dynamic_t {
     dynamic_t::array_t result;
-
     apps.apply([&](const std::map<std::string, std::shared_ptr<node::app_t>>& apps) {
         boost::copy(apps | boost::adaptors::map_keys, std::back_inserter(result));
     });
@@ -281,3 +284,20 @@ node_t::overseer(const std::string& name) const {
 
     return app->overseer();
 }
+
+// boost::optional<io::dispatch_ptr_t>
+// node_t::process(const io::decoder_t::message_type& message, const io::upstream_ptr_t& upstream) const {
+//     // Auth - give service name on construction + dispatch map. Internally uses global auth
+//     // component.
+//     // switch (auth->check_permissions(message)) {
+//     // case auth_t::permission_t::allow:
+//         return dispatch::process(message, upstream);
+//     // default:
+//         // TODO: If upstream_type is `optional` -> send error.
+//         // If `stream` - send error.
+//         // Otherwise implement your own error-notification logic.
+//         // upstream->send<wat?>(...);
+//     // }
+//
+//     // return boost::none;
+// }
