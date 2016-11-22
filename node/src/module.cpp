@@ -10,7 +10,7 @@
 #include "cocaine/detail/isolate/external.hpp"
 #include "cocaine/detail/isolate/process.hpp"
 
-#include "auth/anonymous.hpp"
+#include "auth/promiscuous.hpp"
 
 using namespace cocaine;
 using namespace cocaine::service;

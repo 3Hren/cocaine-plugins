@@ -74,8 +74,8 @@ public:
     /// \tparam Event Requested event.
     template<typename Event>
     auto
-    check_permissions(const std::string& service, const token_t& token) -> permission_t {
-        return check_permissions(service, Event::alias(), token);
+    check_permissions(const std::string& service, const std::string& credentials) -> permission_t {
+        return check_permissions(service, Event::alias(), credentials);
     }
 
     /// Checks access rights for a given authorization entity represented with a token, i.e can it
@@ -86,7 +86,7 @@ public:
     /// \param token Authorization token.
     virtual
     auto
-    check_permissions(const std::string& service, const std::string& event, const token_t& token) const ->
+    check_permissions(const std::string& service, const std::string& event, const std::string& credentials) const ->
         permission_t = 0;
 };
 

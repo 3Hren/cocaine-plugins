@@ -16,7 +16,7 @@ public:
     }
 
     auto
-    check_permissions(const std::string& service, const std::string& event, const token_t& token) const ->
+    check_permissions(const std::string&, const std::string&, const std::string&) const ->
         permission_t override
     {
         return allow_t();
