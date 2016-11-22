@@ -11,15 +11,9 @@
 namespace cocaine {
 namespace api {
 
-namespace {
-
-const char COMPONENT_GROUP_NAME[] = "authorizations";
-
-}  // namespace
-
 auto
 auth(context_t& context, const std::string& name) -> std::shared_ptr<auth_t> {
-    if (auto cfg = context.config().component_group(COMPONENT_GROUP_NAME).get(name)) {
+    if (auto cfg = context.config().component_group("authorizations").get(name)) {
         return context.repository().get<auth_t>(cfg->type(), context, name, cfg->args());
     }
 
