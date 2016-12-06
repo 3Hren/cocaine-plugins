@@ -22,11 +22,8 @@ namespace service {
 namespace ph = std::placeholders;
 
 vicodyn_t::vicodyn_t(context_t& _context,
-                     asio::io_service& io_loop,
                      const std::string& name,
                      const dynamic_t& args) :
-    api::service_t(_context, io_loop, name, args),
-    dispatch(name),
     context(_context),
     logger(context.log(name)),
     signal_dispatcher(std::make_shared<dispatch<io::context_tag>>(name))
@@ -39,6 +36,14 @@ vicodyn_t::vicodyn_t(context_t& _context,
     context.signal_hub().listen(signal_dispatcher, io_loop);
 }
 
+vicodyn_t::~vicodyn_t() {
+    for (auto proxy_description: proxy_map.unsafe()) {
+        auto version = proxy_description.first.first;
+        const auto& name = proxy_description.first.second;
+        COCAINE_LOG_INFO("shutting down virtual service {} - {}", name, vesrion)
+        context.remove(name);
+    }
+}
 
 auto vicodyn_t::on_local_service_exposed(const std::string& name, const service_description_t& meta) -> void {
     COCAINE_LOG_INFO(logger, "exposing {} service to vicodyn");
