@@ -107,7 +107,9 @@ unicorn_cluster_t::unicorn_cluster_t(
     subscribe_timer(_locator.asio()),
     unicorn(api::unicorn(_context, args.as_object().at("backend").as_string()))
 {
-    subscribe();
+    if(args.as_object().at("aggregate_node", false).as_bool()) {
+        subscribe();
+    }
     announce();
 }
 
