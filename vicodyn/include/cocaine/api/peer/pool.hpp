@@ -26,6 +26,17 @@ public:
     virtual
     void
     unregister_real(const std::string& uuid) = 0;
+
+    virtual
+    auto
+    size() -> size_t = 0;
+
+    auto
+    empty() -> bool {
+        return size() == 0;
+    }
+
+
 };
 
 typedef std::shared_ptr<pool_t> pool_ptr;

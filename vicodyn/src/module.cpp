@@ -21,7 +21,7 @@
 
 #include <cocaine/errors.hpp>
 #include <cocaine/repository.hpp>
-#include <cocaine/repository/service.hpp>
+#include <cocaine/repository/gateway.hpp>
 
 using namespace cocaine;
 extern "C" {
