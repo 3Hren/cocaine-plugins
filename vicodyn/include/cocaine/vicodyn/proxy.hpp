@@ -43,6 +43,14 @@ public:
         pool->unregister_real(uuid);
     }
 
+    auto empty() -> bool {
+        return pool->empty();
+    }
+
+    auto size() -> size_t {
+        return pool->size();
+    }
+
 private:
     std::unique_ptr<logging::logger_t> logger;
     io::graph_root_t m_protocol;
