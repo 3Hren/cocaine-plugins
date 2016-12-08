@@ -20,37 +20,35 @@
 
 #pragma once
 
-#include <cocaine/dynamic.hpp>
-#include <cocaine/idl/primitive.hpp>
+#include "cocaine/api/peer/pool.hpp"
 
-#include <map>
-#include <string>
+#include <cocaine/common.hpp>
+#include <cocaine/locked_ptr.hpp>
+#include <cocaine/repository.hpp>
 
 namespace cocaine {
-namespace io {
+namespace api {
 
-struct vicodyn_tag;
+template<>
+struct category_traits<peer::pool_t> {
+    typedef peer::pool_ptr ptr_type;
 
-struct vicodyn {
-    struct nop {
-        typedef vicodyn_tag tag;
+    struct factory_type : public basic_factory<peer::pool_t> {
+        virtual
+        auto get(context_t& context, asio::io_service& io_context, const std::string& name, const dynamic_t& args)
+                -> ptr_type = 0;
+    };
 
-        constexpr static auto alias() noexcept -> const char* {
-            return "nop";
+    template<class T>
+    struct default_factory : public factory_type {
+        auto get(context_t& context, asio::io_service& io_context, const std::string& name, const dynamic_t& args)
+            -> ptr_type override
+        {
+            return ptr_type(new T(context, io_context, name, args));
         }
     };
 };
 
-template<>
-struct protocol<vicodyn_tag> {
-    typedef boost::mpl::int_<
-        1
-    >::type version;
+} // namespace api
+} // namespace cocaine
 
-    typedef boost::mpl::list<
-        vicodyn::nop
-    >::type messages;
-};
-
-}  // namespace io
-}  // namespace cocaine

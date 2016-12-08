@@ -12,6 +12,7 @@
 #include <asio/connect.hpp>
 
 #include <blackhole/logger.hpp>
+#include <cocaine/utility/future.hpp>
 
 namespace cocaine {
 namespace vicodyn {
@@ -29,36 +30,54 @@ auto peer_t::invoke(const io::decoder_t::message_type& incoming_message,
                     const io::graph_node_t& protocol,
                     io::upstream_ptr_t downstream) -> std::shared_ptr<queue::send_t>
 {
-    return queue->append(incoming_message.args(),
-                        incoming_message.type(),
-                        incoming_message.headers(),
-                        protocol,
-                        downstream);
+    assert(error_cb);
+
+    return queue->append(incoming_message.args(), incoming_message.type(), incoming_message.headers(), protocol, downstream);
 }
 
-auto peer_t::make_peer(context_t& context,
-                       asio::io_service& loop,
-                       std::vector<asio::ip::tcp::endpoint> endpoints) -> std::unique_ptr<peer_t> {
-    std::unique_ptr<peer_t> p(new peer_t(context, loop));
-    p->connect(std::move(endpoints));
-    return p;
+auto peer_t::connected() -> bool {
+    return queue->connected();
 }
+auto peer_t::connect(std::vector<asio::ip::tcp::endpoint> _endpoints) -> void {
+    assert(error_cb);
+    endpoints = std::move(_endpoints);
+    auto socket = std::make_shared<asio::ip::tcp::socket>(loop);
 
-auto peer_t::connect(std::vector<asio::ip::tcp::endpoint> endpoints) -> void {
-    typedef asio::ip::tcp tcp;
-    auto socket = std::make_shared<tcp::socket>(loop);
-
-    //TODO: Big problem here if connection was unsuccessfull. We need to find another peer in pool and pass queue to it.
+    std::weak_ptr<peer_t> weak_self(shared_from_this());
     asio::async_connect(*socket, endpoints.begin(), endpoints.end(),
         [=](const std::error_code& ec, std::vector<asio::ip::tcp::endpoint>::const_iterator /*endpoint*/) {
+            auto self = weak_self.lock();
+            if(!self){
+                VICODYN_DEBUG("peer disappeared during connection");
+                return;
+            }
             if(ec) {
                 COCAINE_LOG_ERROR(logger, "could not connect - {}({})", ec.message(), ec.value());
-                std::terminate();
+                error_cb(make_exceptional_future<void>(ec));
+                return;
             }
-            auto ptr = std::make_unique<tcp::socket>(std::move(*socket));
-            auto session = context.engine().attach(std::move(ptr), nullptr);
-            queue->attach(std::move(session));
+            try {
+                if(connect_cb) {
+                    connect_cb();
+                }
+                auto ptr = std::make_unique<asio::ip::tcp::socket>(std::move(*socket));
+                auto session = context.engine().attach(std::move(ptr), nullptr);
+                // queue will be in consistent state if exception is thrown
+                // it is safe to reconnect peer to different endpoint
+                queue->attach(std::move(session));
+            } catch(const std::exception& e) {
+                COCAINE_LOG_WARNING(logger, "failed to attach session to queue: {}", e.what());
+                error_cb(make_exceptional_future<void>());
+            }
         });
+}
+
+auto peer_t::on_connect(connect_callback_t cb) -> void {
+    connect_cb = std::move(cb);
+}
+
+auto peer_t::on_error(error_callback_t cb) -> void {
+    error_cb = std::move(cb);
 }
 
 } // namespace vicodyn

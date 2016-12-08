@@ -12,29 +12,35 @@ namespace cocaine {
 namespace vicodyn {
 namespace queue {
 
-std::shared_ptr<queue::send_t>
-invocation_t::append(const msgpack::object& message,
-                     uint64_t event_id,
-                     hpack::header_storage_t headers,
-                     const io::graph_node_t& incoming_protocol,
-                     io::upstream_ptr_t upstream) {
+auto invocation_t::append(const msgpack::object& message,
+                          uint64_t event_id,
+                          hpack::header_storage_t headers,
+                          const io::graph_node_t& incoming_protocol,
+                          io::upstream_ptr_t upstream) -> std::shared_ptr<queue::send_t>
+{
     auto send_queue = m_session.apply([&](std::shared_ptr<session_t>& session) -> std::shared_ptr<queue::send_t> {
         if(!session) {
             return nullptr;
         }
-        const auto& name = std::get<0>(incoming_protocol.at(event_id));
+        try {
+            const auto& name = std::get<0>(incoming_protocol.at(event_id));
 
-        auto upstream_wrapper = std::make_shared<stream::wrapper_t>(upstream);
-        auto dispatch = std::make_shared<proxy::dispatch_t>(name, upstream_wrapper, incoming_protocol);
+            auto upstream_wrapper = std::make_shared<stream::wrapper_t>(upstream);
+            auto dispatch = std::make_shared<proxy::dispatch_t>(name, upstream_wrapper, incoming_protocol);
 
-        auto downstream = session->fork(dispatch);
-        stream::wrapper_t downstream_wrapper(downstream);
-        downstream_wrapper.append(message, event_id, std::move(headers));
+            auto downstream = session->fork(dispatch);
+            stream::wrapper_t downstream_wrapper(downstream);
+            downstream_wrapper.append(message, event_id, std::move(headers));
 
-        auto s_queue = std::make_shared<queue::send_t>();
-        s_queue->attach(std::move(downstream));
+            auto s_queue = std::make_shared<queue::send_t>();
+            s_queue->attach(std::move(downstream));
 
-        return s_queue;
+            return s_queue;
+        } catch (const std::exception& e) {
+            VICODYN_DEBUG("append to invocation queue failed: {}", e.what());
+            session = nullptr;
+            throw;
+        }
     });
 
     if(!send_queue) {
@@ -46,7 +52,8 @@ invocation_t::append(const msgpack::object& message,
         operation.upstream = std::move(upstream);
         operation.zone = std::make_unique<msgpack::zone>();
         //TODO: WTF? I'm too tired to read what compiler says to me
-        operation.incoming_protocol = const_cast<io::graph_node_t*>(&incoming_protocol);
+        //operation.incoming_protocol = const_cast<io::graph_node_t*>(&incoming_protocol);
+        operation.incoming_protocol = &incoming_protocol;
         msgpack::packer<io::aux::encoded_message_t> packer(operation.encoded_message);
         packer << message;
         size_t offset;
@@ -61,28 +68,39 @@ invocation_t::append(const msgpack::object& message,
 
 }
 
-void
-invocation_t::attach(std::shared_ptr<session_t> _session) {
+auto invocation_t::attach(std::shared_ptr<session_t> _session) -> void {
     m_session.apply([&](std::shared_ptr<session_t>& session){
         BOOST_ASSERT(!session);
         session = _session;
-        for (auto& operation : m_operations) {
-            const auto& name = std::get<0>(operation.incoming_protocol->at(operation.event_id));
+        for (auto it = m_operations.begin(); it != m_operations.end();) {
+            try {
+                const auto& operation = *it;
+                const auto& name = std::get<0>(operation.incoming_protocol->at(operation.event_id));
 
-            auto upstream_wrapper = std::make_shared<stream::wrapper_t>(operation.upstream);
-            auto dispatch = std::make_shared<proxy::dispatch_t>(name, upstream_wrapper, *operation.incoming_protocol);
+                auto upstream_wrapper = std::make_shared<stream::wrapper_t>(operation.upstream);
+                auto dispatch = std::make_shared<proxy::dispatch_t>(name, upstream_wrapper,
+                                                                    *operation.incoming_protocol);
 
-            auto downstream = session->fork(dispatch);
-            stream::wrapper_t downstream_wrapper(downstream);
-            downstream_wrapper.append(operation.data, operation.event_id, std::move(operation.headers));
+                auto downstream = session->fork(dispatch);
+                stream::wrapper_t downstream_wrapper(downstream);
+                downstream_wrapper.append(operation.data, operation.event_id, std::move(operation.headers));
 
-            operation.send_queue->attach(std::move(downstream));
+                operation.send_queue->attach(std::move(downstream));
+            } catch (...) {
+                it = m_operations.erase(it);
+                session = nullptr;
+                throw;
+            }
         }
 
     });
 
     // safe to clean outside lock as it is not used anymore after session is set
     m_operations.clear();
+}
+
+auto invocation_t::connected() -> bool {
+    return m_session->get() != nullptr;
 }
 
 } // namespace queue

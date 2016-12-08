@@ -12,8 +12,7 @@ class wrapper_t: public proxy::appendable_t {
 public:
     wrapper_t(io::upstream_ptr_t upstream);
 
-    void
-    append(const msgpack::object& message, uint64_t event_id, hpack::header_storage_t headers);
+    auto append(const msgpack::object& message, uint64_t event_id, hpack::header_storage_t headers) -> void override;
 
 private:
     io::upstream_ptr_t upstream;

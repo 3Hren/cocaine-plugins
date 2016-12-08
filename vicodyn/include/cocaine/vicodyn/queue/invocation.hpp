@@ -23,8 +23,10 @@ public:
            const io::graph_node_t& protocol,
            io::upstream_ptr_t downstream);
 
-    void
-    attach(std::shared_ptr<session_t> session);
+    auto attach(std::shared_ptr<session_t> session) -> void;
+
+    auto connected() -> bool;
+
 private:
     struct operation_t {
         // msgpack object
@@ -52,7 +54,7 @@ private:
         std::shared_ptr<queue::send_t> send_queue;
     };
 
-    std::vector<operation_t> m_operations;
+    std::deque<operation_t> m_operations;
     synchronized<std::shared_ptr<session_t>> m_session;
 
 };

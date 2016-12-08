@@ -14,18 +14,17 @@ namespace cocaine {
 namespace vicodyn {
 
 proxy_t::proxy_t(context_t& context,
-                 //TODO: Do we need io loop?
                  asio::io_service& io_loop ,
-                 const std::string& name,
-                 //TODO: Do we need args?
+                 const std::string& _name,
                  const dynamic_t& /*args*/,
-                 unsigned int version,
-                 io::graph_root_t protocol) :
-    io::basic_dispatch_t(name),
-    logger(context.log(name)),
-    m_protocol(protocol),
-    m_version(version),
-    pool(api::peer::pool(context, io_loop, "basic"))
+                 unsigned int _version,
+                 io::graph_root_t _protocol) :
+    io::basic_dispatch_t(_name),
+    logger(context.log(_name)),
+    m_protocol(_protocol),
+    m_version(_version),
+    // TODO: Note here we use acceptor io_loop.
+    pool(api::peer::pool(context, io_loop, "basic", _name))
 {
     VICODYN_DEBUG("create proxy");
 }
@@ -56,9 +55,7 @@ proxy_t::process(const io::decoder_t::message_type& incoming_message, const io::
         COCAINE_LOG_ERROR(logger, msg);
         throw error_t(error::slot_not_found, msg);
     }
-    auto peer = pool->choose_peer(name(), incoming_message.headers());
-
-    auto queue = peer->invoke(incoming_message, *backward_protocol, upstream);
+    auto queue = pool->invoke(incoming_message, *backward_protocol, upstream);
 
     // terminal transition
     if(forward_protocol->empty()) {

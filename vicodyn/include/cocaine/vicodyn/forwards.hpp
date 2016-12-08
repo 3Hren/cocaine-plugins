@@ -13,7 +13,7 @@ class pool_t;
 } // namespace cocaine
 
 namespace cocaine {
-namespace service {
+namespace gateway {
 
 class vicodyn_t;
 

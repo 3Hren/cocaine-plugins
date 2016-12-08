@@ -30,8 +30,7 @@ auto send_t::append(const msgpack::object& message, uint64_t event_id, hpack::he
     }
 }
 
-void
-send_t::attach(io::upstream_ptr_t _upstream) {
+auto send_t::attach(io::upstream_ptr_t _upstream) -> void {
     upstream = std::move(_upstream);
     if(!operations.empty()) {
         stream::wrapper_t wrapper(upstream);

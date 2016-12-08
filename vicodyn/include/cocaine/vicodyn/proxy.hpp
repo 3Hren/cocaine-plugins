@@ -18,28 +18,22 @@ public:
             unsigned int version,
             io::graph_root_t protocol);
 
-    auto
-    root() const -> const io::graph_root_t& {
+    auto root() const -> const io::graph_root_t& override {
         return m_protocol;
     }
 
-    int
-    version() const {
+    auto version() const -> int override {
         return m_version;
     }
 
-    virtual
-    auto
-    process(const io::decoder_t::message_type& incoming_message, const io::upstream_ptr_t& upstream) const ->
-        boost::optional<io::dispatch_ptr_t>;
+    auto process(const io::decoder_t::message_type& incoming_message, const io::upstream_ptr_t& upstream) const ->
+        boost::optional<io::dispatch_ptr_t> override;
 
-    void
-    register_real(std::string uuid, std::vector<asio::ip::tcp::endpoint> endpoints, bool local) {
+    auto register_real(std::string uuid, std::vector<asio::ip::tcp::endpoint> endpoints, bool local) -> void {
         pool->register_real(uuid, endpoints, local);
     }
 
-    void
-    unregister_real(const std::string& uuid) {
+    auto unregister_real(const std::string& uuid) -> void {
         pool->unregister_real(uuid);
     }
 

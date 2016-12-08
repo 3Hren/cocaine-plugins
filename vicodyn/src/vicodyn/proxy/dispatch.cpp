@@ -1,5 +1,7 @@
 #include "cocaine/vicodyn/proxy/dispatch.hpp"
 
+#include "cocaine/vicodyn/proxy.hpp"
+
 #include <cocaine/errors.hpp>
 #include <cocaine/format.hpp>
 
@@ -16,8 +18,20 @@ dispatch_t::dispatch_t(const std::string& name,
     current_state(&_current_state)
 {}
 
-boost::optional<io::dispatch_ptr_t>
-dispatch_t::process(const io::decoder_t::message_type& incoming_message, const io::upstream_ptr_t&) const {
+auto dispatch_t::root() const -> const io::graph_root_t& {
+    //TODO: What can we do here except passing proxy reference everywhere?
+    throw error_t("usage of root() is prohibited in transition dynamic dispatch");
+}
+
+auto dispatch_t::version() const -> int {
+    //TODO: What can we do here except passing parent everywhere?
+    throw error_t("usage of version() is prohibited in transition dynamic dispatch");
+}
+
+
+auto dispatch_t::process(const io::decoder_t::message_type& incoming_message, const io::upstream_ptr_t&) const
+    -> boost::optional<io::dispatch_ptr_t>
+{
     VICODYN_DEBUG("processing dispatch {}/{}", incoming_message.span(), incoming_message.type());
     downstream->append(incoming_message.args(), incoming_message.type(), incoming_message.headers());
     auto event_span = incoming_message.type();

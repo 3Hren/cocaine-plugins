@@ -3,12 +3,13 @@ INCLUDE_DIRECTORIES(
 
 ADD_LIBRARY(vicodyn MODULE
         src/api/peer/pool.cpp
+        src/gateway/vicodyn.cpp
         src/module.cpp
-        src/service/vicodyn.cpp
         src/vicodyn/debug.cpp
         src/vicodyn/proxy.cpp
         src/vicodyn/proxy/dispatch.cpp
         src/vicodyn/peer.cpp
+        src/vicodyn/peer/pool/basic.cpp
         src/vicodyn/queue/invocation.cpp
         src/vicodyn/queue/send.cpp
         src/vicodyn/stream/wrapper.cpp
@@ -30,9 +31,3 @@ SET_TARGET_PROPERTIES(vicodyn PROPERTIES
 INSTALL(TARGETS vicodyn
         LIBRARY DESTINATION lib/cocaine
         COMPONENT runtime)
-
-INSTALL(
-        DIRECTORY
-        include/cocaine/idl
-        DESTINATION include/cocaine
-        COMPONENT development)

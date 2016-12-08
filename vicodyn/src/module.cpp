@@ -16,7 +16,7 @@
 
 #include "cocaine/api/peer/pool.hpp"
 #include "cocaine/repository/peer/pool.hpp"
-#include "cocaine/service/vicodyn.hpp"
+#include "cocaine/gateway/vicodyn.hpp"
 #include "cocaine/vicodyn/peer/pool/basic.hpp"
 
 #include <cocaine/errors.hpp>
@@ -32,7 +32,7 @@ validation() -> api::preconditions_t {
 
 void
 initialize(api::repository_t& repository) {
-    repository.insert<service::vicodyn_t>("vicodyn");
+    repository.insert<gateway::vicodyn_t>("vicodyn");
     repository.insert<vicodyn::peer::pool::basic_t>("basic");
 }
 

@@ -3,6 +3,7 @@
 #include "cocaine/vicodyn/forwards.hpp"
 
 #include <cocaine/forwards.hpp>
+#include <cocaine/rpc/graph.hpp>
 
 #include <asio/ip/tcp.hpp>
 
@@ -15,34 +16,32 @@ public:
     typedef pool_t category_type;
     virtual ~pool_t() {}
 
+    /**
+     * Process invocation inside pool. Peer selecting logic is usually applied before invocation.
+     */
     virtual
-    std::shared_ptr<vicodyn::peer_t>
-    choose_peer(const std::string& service_name, const hpack::header_storage_t& headers) = 0;
+    auto invoke(const io::aux::decoded_message_t& incoming_message,
+                const io::graph_node_t& protocol,
+                io::upstream_ptr_t downstream) -> std::shared_ptr<vicodyn::queue::send_t> = 0;
 
     virtual
-    void
-    register_real(std::string uuid, std::vector<asio::ip::tcp::endpoint> endpoints, bool local) = 0;
+    auto register_real(std::string uuid, std::vector<asio::ip::tcp::endpoint> endpoints, bool local) -> void = 0;
 
     virtual
-    void
-    unregister_real(const std::string& uuid) = 0;
+    auto unregister_real(const std::string& uuid) -> void = 0;
 
     virtual
-    auto
-    size() -> size_t = 0;
+    auto size() -> size_t = 0;
 
-    auto
-    empty() -> bool {
+    auto empty() -> bool {
         return size() == 0;
     }
-
-
 };
 
 typedef std::shared_ptr<pool_t> pool_ptr;
 
 pool_ptr
-pool(context_t& context, asio::io_service& io_loop, const std::string& name);
+pool(context_t& context, asio::io_service& io_loop, const std::string& pool_name, const std::string& service_name);
 
 } // namespace peer
 } // namespace api
