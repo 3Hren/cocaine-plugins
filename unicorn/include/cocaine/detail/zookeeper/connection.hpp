@@ -18,6 +18,8 @@
 #include "cocaine/detail/zookeeper/handler.hpp"
 #include "cocaine/detail/zookeeper/session.hpp"
 
+#include <cocaine/locked_ptr.hpp>
+
 #include <asio/io_service.hpp>
 
 #include <boost/optional/optional.hpp>
@@ -65,6 +67,8 @@ private:
 */
 class connection_t {
 public:
+    typedef std::shared_ptr<zhandle_t> handle_ptr;
+
     connection_t(const cfg_t& cfg, const session_t& session);
     connection_t(const connection_t&) = delete;
     connection_t& operator=(const connection_t&) = delete;
@@ -134,14 +138,16 @@ private:
         connection_t& parent;
     };
 
+    void reconnect(handle_ptr& old_handle);
     path_t format_path(const path_t path);
+    handle_ptr zhandle();
 
     cfg_t cfg;
     session_t session;
-    zhandle_t* zhandle;
+    cocaine::synchronized<handle_ptr> _zhandle;
     void check_rc(int rc) const;
     void check_connectivity();
-    zhandle_t* init();
+    handle_ptr init();
     void close(zhandle_t* handle);
     void create_prefix();
     handler_scope_t w_scope;
