@@ -64,6 +64,11 @@ public:
    ~ipvs_t();
 
     auto
+    resolve_policy() const -> resolve_policy_t {
+        return resolve_policy_t::remote_only;
+    }
+
+    auto
     resolve(const std::string& name) const -> service_description_t;
 
     auto

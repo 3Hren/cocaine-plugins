@@ -475,3 +475,12 @@ ipvs_t::cleanup(const std::string& uuid, const std::string& name) -> void {
 
     ptr->at(name)->remove(uuid);
 }
+
+auto
+ipvs_t::cleanup(const std::string& uuid) -> void {
+    m_remotes.apply([&](remote_map_t& remote_map){
+        for(auto& remote_pair: remote_map) {
+            remote_pair.second->remove(uuid);
+        }
+    });
+}
