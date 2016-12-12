@@ -18,10 +18,15 @@
 #include "cocaine/detail/zookeeper/handler.hpp"
 #include "cocaine/detail/zookeeper/session.hpp"
 
+#include <asio/io_service.hpp>
+
+#include <boost/optional/optional.hpp>
+
 #include <zookeeper/zookeeper.h>
 
 #include <vector>
 #include <string>
+#include <thread>
 
 namespace zookeeper {
 
@@ -137,9 +142,15 @@ private:
     void check_rc(int rc) const;
     void check_connectivity();
     zhandle_t* init();
+    void close(zhandle_t* handle);
     void create_prefix();
     handler_scope_t w_scope;
     managed_watch_handler_base_t& watcher;
+
+    // special loop for closing connections to avoid deadlocks
+    asio::io_service io_loop;
+    boost::optional<asio::io_service::work> work;
+    std::thread close_thread;
 };
 }
 

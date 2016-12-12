@@ -19,6 +19,8 @@
 
 #include "cocaine/detail/zookeeper/errors.hpp"
 
+#include <boost/optional/optional.hpp>
+
 #include <zookeeper/zookeeper.h>
 
 #include <algorithm>
@@ -79,7 +81,10 @@ zookeeper::connection_t::connection_t(const cfg_t& _cfg, const session_t& _sessi
     session(_session),
     zhandle(),
     w_scope(),
-    watcher(w_scope.get_handler<reconnect_action_t>(*this))
+    watcher(w_scope.get_handler<reconnect_action_t>(*this)),
+    io_loop(),
+    work(asio::io_service::work(io_loop)),
+    close_thread([&](){io_loop.run();})
 {
     if(!cfg.prefix.empty() && cfg.prefix[0] != '/') {
         throw std::system_error(std::make_error_code(std::errc::invalid_argument), "invalid prefix");
@@ -92,8 +97,10 @@ zookeeper::connection_t::connection_t(const cfg_t& _cfg, const session_t& _sessi
 
 zookeeper::connection_t::~connection_t() {
     if(zhandle) {
-        zookeeper_close(zhandle);
+        close(zhandle);
     }
+    work = boost::none;
+    close_thread.join();
 }
 
 path_t zookeeper::connection_t::format_path(const path_t path) {
@@ -206,6 +213,7 @@ void connection_t::reconnect() {
             // Swap in any case.
             // Sometimes we really want to force reconnect even when zk is unavailable at all. For example on lock release.
             std::swap(new_zhandle, zhandle);
+            close(new_zhandle);
             throw std::system_error(cocaine::error::could_not_connect);
         }
     } else {
@@ -214,7 +222,7 @@ void connection_t::reconnect() {
         }
     }
     std::swap(new_zhandle, zhandle);
-    zookeeper_close(new_zhandle);
+    close(new_zhandle);
 }
 
 zhandle_t* connection_t::init() {
@@ -225,6 +233,12 @@ zhandle_t* connection_t::init() {
                                             mc_ptr(&watcher),
                                             0);
     return new_zhandle;
+}
+
+void connection_t::close(zhandle_t* handle) {
+    io_loop.post([=]{
+        zookeeper_close(handle);
+    });
 }
 
 void connection_t::create_prefix() {
