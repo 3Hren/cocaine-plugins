@@ -226,6 +226,7 @@ void connection_t::reconnect(handle_ptr& old_zhandle) {
         if(!new_zhandle.get() || is_unrecoverable(new_zhandle.get())) {
             // Swap in any case.
             // Sometimes we really want to force reconnect even when zk is unavailable at all. For example on lock release.
+            old_zhandle.swap(new_zhandle);
             throw std::system_error(cocaine::error::could_not_connect);
         }
     } else {
