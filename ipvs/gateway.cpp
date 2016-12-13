@@ -127,6 +127,9 @@ public:
     size_t
     remove(const std::string& uuid);
 
+    size_t
+    backends_size() const;
+
 private:
     void
     format_address(union nf_inet_addr& target, const tcp::endpoint& endpoint);
@@ -349,6 +352,11 @@ ipvs_t::remote_t::format_address(union nf_inet_addr& target, const tcp::endpoint
     }
 }
 
+size_t
+ipvs_t::remote_t::backends_size() const {
+    return backends.size();
+}
+
 // IPVS gateway
 
 namespace cocaine {
@@ -481,6 +489,16 @@ ipvs_t::cleanup(const std::string& uuid) -> void {
     m_remotes.apply([&](remote_map_t& remote_map){
         for(auto& remote_pair: remote_map) {
             remote_pair.second->remove(uuid);
+        }
+    });
+}
+
+auto
+ipvs_t::total_count(const std::string& name) const -> size_t {
+    return m_remotes.apply([&](const remote_map_t& remote_map){
+        auto it = remote_map.find(name);
+        if(it != remote_map.end()) {
+            return it->second->backends_size();
         }
     });
 }
