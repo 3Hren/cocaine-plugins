@@ -15,7 +15,7 @@ ADD_LIBRARY(vicodyn MODULE
         src/vicodyn/stream/wrapper.cpp
         )
 
-ADD_DEFINITIONS("-DVICODYN_USE_DEBUG")
+#ADD_DEFINITIONS("-DVICODYN_USE_DEBUG")
 TARGET_LINK_LIBRARIES(vicodyn
         msgpack
         blackhole

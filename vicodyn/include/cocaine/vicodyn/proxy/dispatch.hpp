@@ -27,6 +27,7 @@ private:
     appendable_ptr downstream;
     mutable std::string full_name;
     mutable const io::graph_node_t* current_state;
+    mutable io::graph_root_t current_root;
 };
 
 } // namespace proxy

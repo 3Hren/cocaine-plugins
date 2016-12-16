@@ -9,23 +9,34 @@ namespace cocaine {
 namespace vicodyn {
 namespace proxy {
 
+auto make_root(const io::graph_node_t& branch) -> io::graph_root_t {
+    io::graph_root_t root;
+    io::graph_node_t reverse_protocol;
+    for(auto p: branch) {
+        root[p.first] = std::make_tuple(std::get<0>(p.second), std::get<1>(p.second), boost::make_optional(reverse_protocol));
+    }
+    return root;
+}
+
 dispatch_t::dispatch_t(const std::string& name,
                        appendable_ptr _downstream,
                        const io::graph_node_t& _current_state) :
     io::basic_dispatch_t(name),
     downstream(std::move(_downstream)),
     full_name(name),
-    current_state(&_current_state)
-{}
+    current_state(&_current_state),
+    current_root(make_root(*current_state))
+{
+}
 
 auto dispatch_t::root() const -> const io::graph_root_t& {
-    //TODO: What can we do here except passing proxy reference everywhere?
-    throw error_t("usage of root() is prohibited in transition dynamic dispatch");
+    //TODO: What can we do here except passing parent everywhere or generating graph_root on the fly?
+    return current_root;
 }
 
 auto dispatch_t::version() const -> int {
     //TODO: What can we do here except passing parent everywhere?
-    throw error_t("usage of version() is prohibited in transition dynamic dispatch");
+    return 1;
 }
 
 
@@ -56,6 +67,8 @@ auto dispatch_t::process(const io::decoder_t::message_type& incoming_message, co
 
     //next transition
     current_state = &(*incoming_protocol);
+    current_root = make_root(*current_state);
+
     full_name = cocaine::format("{}/{}", full_name, std::get<0>(protocol_tuple));
     return boost::optional<io::dispatch_ptr_t>(shared_from_this());
 }

@@ -13,7 +13,7 @@ if(_vicodyn_debug_logger_()) {COCAINE_LOG_WARNING(_vicodyn_debug_logger_(), __VA
 #else
 template<class... Args>
 void
-_vicodyn_nowhere_(Args&&) {}
+_vicodyn_nowhere_(Args&&...) {}
 #define VICODYN_DEBUG(...) _vicodyn_nowhere_(__VA_ARGS__);
 #define VICODYN_REGISTER_LOGGER(logger) _vicodyn_nowhere_(logger);
 

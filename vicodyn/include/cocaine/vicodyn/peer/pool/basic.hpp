@@ -36,6 +36,8 @@ public:
 
     basic_t(context_t& _context, asio::io_service& _io_loop, const std::string& service_name, const dynamic_t&);
 
+    ~basic_t();
+
     auto invoke(const io::aux::decoded_message_t& incoming_message,
                 const io::graph_node_t& protocol,
                 io::upstream_ptr_t downstream) -> std::shared_ptr<vicodyn::queue::send_t> override;

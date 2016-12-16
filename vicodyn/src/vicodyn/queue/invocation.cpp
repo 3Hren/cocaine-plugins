@@ -86,6 +86,7 @@ auto invocation_t::attach(std::shared_ptr<session_t> _session) -> void {
                 downstream_wrapper.append(operation.data, operation.event_id, std::move(operation.headers));
 
                 operation.send_queue->attach(std::move(downstream));
+                it = m_operations.erase(it);
             } catch (...) {
                 it = m_operations.erase(it);
                 session = nullptr;

@@ -3,6 +3,9 @@
 #include <cocaine/context.hpp>
 #include <cocaine/dynamic.hpp>
 #include <cocaine/errors.hpp>
+#include <cocaine/logging.hpp>
+
+#include <blackhole/logger.hpp>
 
 #include <functional>
 #include <cocaine/utility/future.hpp>
@@ -59,6 +62,8 @@ basic_t::basic_t(context_t& _context, asio::io_service& _io_loop, const std::str
 {
     rebalance_peers();
 }
+
+basic_t::~basic_t() = default;
 
 auto basic_t::invoke(const io::aux::decoded_message_t& incoming_message,
                      const io::graph_node_t& protocol,
@@ -134,7 +139,7 @@ auto basic_t::connect_peer(std::shared_ptr<peer_t> peer, remote_map_t& remote_ma
     VICODYN_DEBUG(print_remotes(remote_map));
     auto it = std::min_element(remote_map.begin(), remote_map.end(), comp);
     if(it == remote_map.end() || !it->second.active() || it->second.peer) {
-        COCAINE_LOG_DEBUG(logger,"could not connect peer - no remotes");
+        COCAINE_LOG_WARNING(logger,"could not connect peer - no remotes");
         return;
     }
     it->second.last_used = std::chrono::system_clock::now();
@@ -159,14 +164,20 @@ auto basic_t::rebalance_peers() -> void {
         }
     });
     remotes.apply([&](remote_map_t& remote_map){
-        auto peer_count = [](const remote_map_t& r_map) {
+        auto peer_counter = [](const remote_map_t& r_map) {
             return static_cast<size_t>(std::count_if(r_map.begin(), r_map.end(), [](const remote_map_t::value_type& p) {
                 return static_cast<bool>(p.second.peer);
             }));
         };
 
+        auto available_counter = [](const remote_map_t& r_map) {
+            return static_cast<size_t>(std::count_if(r_map.begin(), r_map.end(), [](const remote_map_t::value_type& p) {
+                return static_cast<bool>(p.second.active());
+            }));
+        };
+
         // first evict old peer from pool
-        if(peer_count(remote_map) == pool_size) {
+        if(peer_counter(remote_map) >= pool_size) {
             COCAINE_LOG_DEBUG(logger, "trying to evict old peer");
             auto comp = [&](const remote_map_t::value_type& lhs, const remote_map_t::value_type& rhs) {
                 if(!!lhs.second.peer == !!rhs.second.peer) {
@@ -190,9 +201,12 @@ auto basic_t::rebalance_peers() -> void {
             COCAINE_LOG_DEBUG(logger, "pool is not full, skipping eviction");
         }
 
-        COCAINE_LOG_DEBUG(logger, "current active peer count: {}", peer_count(remote_map));
-        while(peer_count(remote_map) < std::min(pool_size, remote_map.size())) {
-            COCAINE_LOG_INFO(logger, "connecting one more peer in pool");
+        auto peer_count = peer_counter(remote_map);
+        auto available_count = available_counter(remote_map);
+        size_t new_count = std::min(pool_size, available_count) - peer_count;
+        COCAINE_LOG_INFO(logger, "current active peer count: {}, connecting {} peers", peer_count, new_count);
+        for(size_t i = 0; i < new_count; i++) {
+            COCAINE_LOG_DEBUG(logger, "connecting one more peer");
             auto peer = std::make_shared<peer_t>(context, io_loop);
             connect_peer(peer, remote_map);
         }
