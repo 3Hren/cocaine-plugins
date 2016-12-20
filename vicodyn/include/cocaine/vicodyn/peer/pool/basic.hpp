@@ -55,6 +55,8 @@ private:
     auto rebalance_peers() -> void;
     auto on_peer_error(const std::string& uuid, std::future<void> future) -> void;
 
+    std::shared_ptr<dispatch<io::context_tag>> signal_dispatcher;
+
     size_t pool_size;
     size_t retry_count;
     std::chrono::milliseconds freeze_time;

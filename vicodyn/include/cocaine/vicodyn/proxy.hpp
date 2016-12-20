@@ -12,7 +12,7 @@ namespace vicodyn {
 class proxy_t : public io::basic_dispatch_t {
 public:
     proxy_t(context_t& context,
-            asio::io_service& io_loop,
+            std::shared_ptr<asio::io_service> io_loop,
             const std::string& name,
             const dynamic_t& args,
             unsigned int version,
@@ -46,6 +46,7 @@ public:
     }
 
 private:
+    std::shared_ptr<asio::io_service> io_loop;
     const std::unique_ptr<logging::logger_t> logger;
     const io::graph_root_t m_protocol;
     const unsigned int m_version;

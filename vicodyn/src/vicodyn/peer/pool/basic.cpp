@@ -1,14 +1,20 @@
 #include "cocaine/vicodyn/peer/pool/basic.hpp"
 
 #include <cocaine/context.hpp>
+#include <cocaine/context/signal.hpp>
 #include <cocaine/dynamic.hpp>
 #include <cocaine/errors.hpp>
+#include <cocaine/idl/context.hpp>
 #include <cocaine/logging.hpp>
+#include <cocaine/rpc/dispatch.hpp>
+#include <cocaine/traits/endpoint.hpp>
+#include <cocaine/traits/vector.hpp>
 
 #include <blackhole/logger.hpp>
 
 #include <functional>
 #include <cocaine/utility/future.hpp>
+#include <cocaine/idl/context.hpp>
 
 namespace cocaine {
 namespace vicodyn {
@@ -51,6 +57,7 @@ auto print_remotes(const basic_t::remote_map_t& peers) -> std::string {
 }
 
 basic_t::basic_t(context_t& _context, asio::io_service& _io_loop, const std::string& name, const dynamic_t& args) :
+        signal_dispatcher(std::make_shared<dispatch<io::context_tag>>("basic_pool_signal_dispatcher")),
         pool_size(args.as_object().at("pool_size", 3ul).as_uint()),
         retry_count(args.as_object().at("retry_count", 3ul).as_uint()),
         freeze_time(std::chrono::milliseconds(args.as_object().at("freeze_time_ms", 1000ul).as_uint())),
@@ -60,6 +67,11 @@ basic_t::basic_t(context_t& _context, asio::io_service& _io_loop, const std::str
         io_loop(_io_loop),
         rebalance_timer(io_loop)
 {
+    signal_dispatcher->on<io::context::shutdown>([=](){
+        rebalance_timer.cancel();
+        remotes->clear();
+    });
+    context.signal_hub().listen(signal_dispatcher, io_loop);
     rebalance_peers();
 }
 
@@ -74,7 +86,7 @@ auto basic_t::invoke(const io::aux::decoded_message_t& incoming_message,
     for(size_t i = 0; i < retry_count; i++) {
         std::tie(uuid, peer) = choose_peer();
         try {
-            COCAINE_LOG_INFO(logger, "processing invocation via {}", uuid);
+            COCAINE_LOG_DEBUG(logger, "processing invocation via {}", uuid);
             return peer->invoke(incoming_message, protocol, downstream);
         } catch(std::system_error& e) {
             on_peer_error(uuid, make_exceptional_future<void>());

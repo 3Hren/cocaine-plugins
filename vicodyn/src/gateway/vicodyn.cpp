@@ -83,7 +83,7 @@ auto vicodyn_t::consume(const std::string& uuid,
         } else {
             auto asio = std::make_shared<asio::io_service>();
             auto proxy = std::make_unique<vicodyn::proxy_t>(context,
-                                                            *asio,
+                                                            asio,
                                                             "virtual::" + name,
                                                             dynamic_t(),
                                                             version,

@@ -14,17 +14,18 @@ namespace cocaine {
 namespace vicodyn {
 
 proxy_t::proxy_t(context_t& context,
-                 asio::io_service& io_loop ,
+                 std::shared_ptr<asio::io_service> _io_loop ,
                  const std::string& _name,
                  const dynamic_t& /*args*/,
                  unsigned int _version,
                  io::graph_root_t _protocol) :
     io::basic_dispatch_t(_name),
+    io_loop(std::move(_io_loop)),
     logger(context.log(_name)),
     m_protocol(_protocol),
     m_version(_version),
     // TODO: Note here we use acceptor io_loop.
-    pool(api::peer::pool(context, io_loop, "basic", _name))
+    pool(api::peer::pool(context, *io_loop, "basic", _name))
 {
     VICODYN_DEBUG("create proxy");
 }
