@@ -45,7 +45,7 @@ public:
 
     auto register_real(std::string uuid, std::vector<asio::ip::tcp::endpoint> ep, bool) -> void override;
 
-    auto unregister_real(const std::string& uuid) -> void override;
+    auto deregister_real(const std::string& uuid) -> void override;
 
     auto size() -> size_t override;
 
@@ -56,7 +56,7 @@ private:
     auto on_peer_error(const std::string& uuid, std::future<void> future) -> void;
 
     size_t pool_size;
-    size_t retry_cnt;
+    size_t retry_count;
     std::chrono::milliseconds freeze_time;
     std::chrono::milliseconds reconnect_age;
     context_t& context;

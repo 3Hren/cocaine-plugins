@@ -24,7 +24,7 @@ public:
     ~vicodyn_t();
 
     struct proxy_description_t {
-        proxy_description_t(actor_t& _actor, vicodyn::proxy_t& _proxy);
+        proxy_description_t(std::unique_ptr<actor_t> _actor, vicodyn::proxy_t& _proxy);
 
         auto endpoints() const -> std::vector<asio::ip::tcp::endpoint>;
 
@@ -32,7 +32,7 @@ public:
 
         auto version() const -> unsigned int;
 
-        actor_t& actor;
+        std::unique_ptr<actor_t> actor;
         vicodyn::proxy_t& proxy;
     };
 
@@ -55,9 +55,8 @@ public:
     auto total_count(const std::string& name) const -> size_t override;
 
 private:
+    // map an unchanged service name to proxy, which balances requests across peers
     typedef std::map<std::string, proxy_description_t> proxy_map_t;
-
-    static std::string prefix;
 
     context_t& context;
     std::string local_uuid;

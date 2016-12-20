@@ -93,7 +93,6 @@ auto invocation_t::attach(std::shared_ptr<session_t> _session) -> void {
                 throw;
             }
         }
-
     });
 
     // safe to clean outside lock as it is not used anymore after session is set

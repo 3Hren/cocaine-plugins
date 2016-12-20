@@ -52,7 +52,7 @@ auto print_remotes(const basic_t::remote_map_t& peers) -> std::string {
 
 basic_t::basic_t(context_t& _context, asio::io_service& _io_loop, const std::string& name, const dynamic_t& args) :
         pool_size(args.as_object().at("pool_size", 3ul).as_uint()),
-        retry_cnt(args.as_object().at("retry_cnt", 3ul).as_uint()),
+        retry_count(args.as_object().at("retry_count", 3ul).as_uint()),
         freeze_time(std::chrono::milliseconds(args.as_object().at("freeze_time_ms", 1000ul).as_uint())),
         reconnect_age(std::chrono::milliseconds(args.as_object().at("reconnect_age_ms", 15000ul).as_uint())),
         context(_context),
@@ -71,7 +71,7 @@ auto basic_t::invoke(const io::aux::decoded_message_t& incoming_message,
 {
     std::shared_ptr<peer_t> peer;
     std::string uuid;
-    for(size_t i = 0; i < retry_cnt; i++) {
+    for(size_t i = 0; i < retry_count; i++) {
         std::tie(uuid, peer) = choose_peer();
         try {
             COCAINE_LOG_INFO(logger, "processing invocation via {}", uuid);
@@ -170,15 +170,14 @@ auto basic_t::rebalance_peers() -> void {
             }));
         };
 
-        auto available_counter = [](const remote_map_t& r_map) {
-            return static_cast<size_t>(std::count_if(r_map.begin(), r_map.end(), [](const remote_map_t::value_type& p) {
-                return static_cast<bool>(p.second.active());
-            }));
+        auto available_counter = [](const remote_map_t& r_map) -> size_t {
+            return std::count_if(r_map.begin(), r_map.end(), [](const remote_map_t::value_type& p) {
+                return p.second.active();
+            });
         };
 
         // first evict old peer from pool
         if(peer_counter(remote_map) >= pool_size) {
-            COCAINE_LOG_DEBUG(logger, "trying to evict old peer");
             auto comp = [&](const remote_map_t::value_type& lhs, const remote_map_t::value_type& rhs) {
                 if(!!lhs.second.peer == !!rhs.second.peer) {
                     return lhs.second.last_used < rhs.second.last_used;
@@ -197,8 +196,9 @@ auto basic_t::rebalance_peers() -> void {
                                  std::chrono::duration_cast<std::chrono::milliseconds>(age).count());
                 it->second.peer = nullptr;
             }
+            COCAINE_LOG_INFO(logger, "evicted old peer");
         } else {
-            COCAINE_LOG_DEBUG(logger, "pool is not full, skipping eviction");
+            COCAINE_LOG_INFO(logger, "pool is not full, skipping eviction");
         }
 
         auto peer_count = peer_counter(remote_map);
@@ -220,7 +220,7 @@ auto basic_t::register_real(std::string uuid, std::vector<asio::ip::tcp::endpoin
     rebalance_peers();
 }
 
-auto basic_t::unregister_real(const std::string& uuid) -> void{
+auto basic_t::deregister_real(const std::string& uuid) -> void{
     COCAINE_LOG_DEBUG(logger,"unregistering real {}", uuid);
     remotes->erase(uuid);
     rebalance_peers();

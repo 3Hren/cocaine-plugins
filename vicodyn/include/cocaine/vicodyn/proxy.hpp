@@ -9,7 +9,7 @@
 namespace cocaine {
 namespace vicodyn {
 
-class proxy_t : public io::basic_dispatch_t{
+class proxy_t : public io::basic_dispatch_t {
 public:
     proxy_t(context_t& context,
             asio::io_service& io_loop,
@@ -33,8 +33,8 @@ public:
         pool->register_real(uuid, endpoints, local);
     }
 
-    auto unregister_real(const std::string& uuid) -> void {
-        pool->unregister_real(uuid);
+    auto deregister_real(const std::string& uuid) -> void {
+        pool->deregister_real(uuid);
     }
 
     auto empty() -> bool {
@@ -46,9 +46,9 @@ public:
     }
 
 private:
-    std::unique_ptr<logging::logger_t> logger;
-    io::graph_root_t m_protocol;
-    unsigned int m_version;
+    const std::unique_ptr<logging::logger_t> logger;
+    const io::graph_root_t m_protocol;
+    const unsigned int m_version;
     api::peer::pool_ptr pool;
 };
 

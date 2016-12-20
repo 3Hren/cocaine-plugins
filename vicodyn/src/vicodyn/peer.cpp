@@ -6,13 +6,13 @@
 #include <cocaine/rpc/asio/decoder.hpp>
 #include <cocaine/rpc/graph.hpp>
 #include <cocaine/rpc/session.hpp>
+#include <cocaine/utility/future.hpp>
 #include <cocaine/memory.hpp>
 
 #include <asio/ip/tcp.hpp>
 #include <asio/connect.hpp>
 
 #include <blackhole/logger.hpp>
-#include <cocaine/utility/future.hpp>
 
 namespace cocaine {
 namespace vicodyn {
@@ -22,7 +22,7 @@ peer_t::~peer_t() = default;
 peer_t::peer_t(context_t& _context, asio::io_service& _loop) :
     context(_context),
     loop(_loop),
-    logger(context.log("TODO:NAME PEER")),
+    logger(context.log("vicodyn_peer")),
     queue(new queue::invocation_t)
 {}
 
@@ -44,6 +44,8 @@ auto peer_t::connect(std::vector<asio::ip::tcp::endpoint> _endpoints) -> void {
     auto socket = std::make_shared<asio::ip::tcp::socket>(loop);
 
     std::weak_ptr<peer_t> weak_self(shared_from_this());
+
+    //TODO: save socket in  peer
     asio::async_connect(*socket, endpoints.begin(), endpoints.end(),
         [=](const std::error_code& ec, std::vector<asio::ip::tcp::endpoint>::const_iterator /*endpoint*/) {
             auto self = weak_self.lock();
@@ -61,6 +63,7 @@ auto peer_t::connect(std::vector<asio::ip::tcp::endpoint> _endpoints) -> void {
                     connect_cb();
                 }
                 auto ptr = std::make_unique<asio::ip::tcp::socket>(std::move(*socket));
+                //TODO: what can we do with shutdown and empty engines in context?
                 auto session = context.engine().attach(std::move(ptr), nullptr);
                 // queue will be in consistent state if exception is thrown
                 // it is safe to reconnect peer to different endpoint

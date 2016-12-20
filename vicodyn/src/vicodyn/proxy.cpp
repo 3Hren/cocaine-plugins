@@ -31,27 +31,26 @@ proxy_t::proxy_t(context_t& context,
 
 boost::optional<io::dispatch_ptr_t>
 proxy_t::process(const io::decoder_t::message_type& incoming_message, const io::upstream_ptr_t& upstream) const {
-
-    auto event_span = incoming_message.type();
-    auto protocol_span = m_protocol.find(event_span);
+    auto slot_id = incoming_message.type();
+    auto protocol_it = m_protocol.find(slot_id);
     COCAINE_LOG_DEBUG(logger, "graph has {} handles", m_protocol.size());
     COCAINE_LOG_DEBUG(logger, "graph handle is {}", m_protocol.begin()->first);
-    if(protocol_span == m_protocol.end()) {
-        auto msg = cocaine::format("could not find event with id {} in protocol for {}", event_span, name());
+    if(protocol_it == m_protocol.end()) {
+        auto msg = cocaine::format("could not find event with id {} in protocol for {}", slot_id, name());
         COCAINE_LOG_ERROR(logger, msg);
         throw error_t(error::slot_not_found, msg);
     }
-    const auto& protocol_tuple = protocol_span->second;
+    const auto& protocol_tuple = protocol_it->second;
     const auto& forward_protocol = std::get<1>(protocol_tuple);
     if(!forward_protocol) {
-        auto msg = cocaine::format("logical error - initial event is recurrent for span {}, dispatch {}", event_span, name());
+        auto msg = cocaine::format("logical error - initial event is recurrent for span {}, dispatch {}", slot_id, name());
         COCAINE_LOG_ERROR(logger, msg);
         throw error_t(error::slot_not_found, msg);
     }
 
     const auto& backward_protocol = std::get<2>(protocol_tuple);
     if(!backward_protocol) {
-        auto msg = cocaine::format("logical error - backward initial event is recurrent for span {}, dispatch {}", event_span, name());
+        auto msg = cocaine::format("logical error - backward initial event is recurrent for span {}, dispatch {}", slot_id, name());
         COCAINE_LOG_ERROR(logger, msg);
         throw error_t(error::slot_not_found, msg);
     }

@@ -14,7 +14,7 @@ namespace cocaine {
 namespace vicodyn {
 namespace queue {
 
-class send_t: public proxy::appendable_t{
+class send_t: public proxy::appendable_t {
 public:
     auto append(const msgpack::object& message, uint64_t event_id, hpack::header_storage_t headers) -> void override;
 
