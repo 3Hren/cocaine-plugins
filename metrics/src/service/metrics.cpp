@@ -13,10 +13,81 @@
 #include <metrics/accumulator/snapshot/uniform.hpp>
 #include <metrics/meter.hpp>
 #include <metrics/timer.hpp>
-
+#include <metrics/visitor.hpp>
 
 namespace cocaine {
 namespace service {
+
+class plain_t : public metrics::visitor_t {
+    const std::string& m_name;
+    dynamic_t::object_t& m_out;
+
+public:
+    plain_t(const std::string& name, dynamic_t::object_t& out) :
+        m_name(name),
+        m_out(out)
+    {}
+
+    auto visit(const metrics::gauge<std::int64_t>& metric) -> void override {
+        do_visit(metric);
+    }
+
+    auto visit(const metrics::gauge<std::uint64_t>& metric) -> void override {
+        do_visit(metric);
+    }
+
+    auto visit(const metrics::gauge<std::double_t>& metric) -> void override {
+        do_visit(metric);
+    }
+
+    auto visit(const std::atomic<std::int64_t>& metric) -> void override {
+        do_visit(metric);
+    }
+
+    auto visit(const std::atomic<std::uint64_t>& metric) -> void override {
+        do_visit(metric);
+    }
+
+    auto visit(const metrics::meter_t& metric) -> void override {
+        m_out[m_name + ".count"] = metric.count();
+        m_out[m_name + ".m01rate"] = metric.m01rate();
+        m_out[m_name + ".m05rate"] = metric.m05rate();
+        m_out[m_name + ".m15rate"] = metric.m15rate();
+    }
+
+    auto visit(const metrics::timer<metrics::accumulator::sliding::window_t>& metric) -> void override {
+        do_visit(metric);
+    }
+
+private:
+    template<typename T>
+    auto do_visit(const metrics::gauge<T>& metric) -> void {
+        m_out[m_name] = metric();
+    }
+
+    template<typename T>
+    auto do_visit(const std::atomic<T>& metric) -> void {
+        m_out[m_name] = metric.load();
+    }
+
+    template<typename T>
+    auto do_visit(const metrics::timer<T>& metric) -> void {
+        m_out[m_name + ".count"] = metric.count();
+        m_out[m_name + ".m01rate"] = metric.m01rate();
+        m_out[m_name + ".m05rate"] = metric.m05rate();
+        m_out[m_name + ".m15rate"] = metric.m15rate();
+
+        const auto snapshot = metric.snapshot();
+        m_out[m_name + ".p50"] = snapshot.median() / 1e6;
+        m_out[m_name + ".p75"] = snapshot.p75() / 1e6;
+        m_out[m_name + ".p90"] = snapshot.p90() / 1e6;
+        m_out[m_name + ".p95"] = snapshot.p95() / 1e6;
+        m_out[m_name + ".p98"] = snapshot.p98() / 1e6;
+        m_out[m_name + ".p99"] = snapshot.p99() / 1e6;
+        m_out[m_name + ".mean"] = snapshot.mean() / 1e6;
+        m_out[m_name + ".stddev"] = snapshot.stddev() / 1e6;
+    }
+};
 
 metrics_t::metrics_t(context_t& context,
                      asio::io_service& asio,
@@ -43,47 +114,13 @@ metrics_t::metrics_t(context_t& context,
 }
 
 auto metrics_t::metrics() const -> dynamic_t {
-    dynamic_t::object_t result;
-
-    for (const auto& item : hub.counters<std::int64_t>()) {
-        const auto& _name = std::get<0>(item).name();
-        const auto& counter = std::get<1>(item);
-
-        result[_name] = counter.get()->load();
+    dynamic_t::object_t out;
+    for (const auto& metric : hub.select()) {
+        plain_t visitor(metric->name(), out);
+        metric->apply(visitor);
     }
 
-    for (const auto& item : hub.meters()) {
-        const auto& _name = std::get<0>(item).name();
-        const auto& meter = std::get<1>(item);
-
-        result[_name + ".count"] = meter.get()->count();
-        result[_name + ".m01rate"] = meter.get()->m01rate();
-        result[_name + ".m05rate"] = meter.get()->m05rate();
-        result[_name + ".m15rate"] = meter.get()->m15rate();
-    }
-
-    for (const auto& item : hub.timers()) {
-        const auto& _name = std::get<0>(item).name();
-        const auto& timer = std::get<1>(item);
-
-        result[_name + ".count"] = timer.get()->count();
-        result[_name + ".m01rate"] = timer.get()->m01rate();
-        result[_name + ".m05rate"] = timer.get()->m05rate();
-        result[_name + ".m15rate"] = timer.get()->m15rate();
-
-        const auto snapshot = timer->snapshot();
-
-        result[_name + ".mean"] = snapshot.mean() / 1e6;
-        result[_name + ".stddev"] = snapshot.stddev() / 1e6;
-        result[_name + ".p50"] = snapshot.median() / 1e6;
-        result[_name + ".p75"] = snapshot.p75() / 1e6;
-        result[_name + ".p90"] = snapshot.p90() / 1e6;
-        result[_name + ".p95"] = snapshot.p95() / 1e6;
-        result[_name + ".p98"] = snapshot.p98() / 1e6;
-        result[_name + ".p99"] = snapshot.p99() / 1e6;
-    }
-
-    return result;
+    return out;
 }
 
 }  // namespace service
