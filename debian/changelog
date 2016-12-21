@@ -8,6 +8,24 @@ cocaine-plugins (0.12.11-alpha1) unstable; urgency=low
 
  -- Anton Matveenko <antmat@me.com>  Wed, 21 Dec 2016 16:20:18 +0300
 
+cocaine-plugins (0.12.10.11) unstable; urgency=low
+
+  * Remove useless prefix in queue depth metric
+
+ -- Anton Matveenko <antmat@me.com>  Fri, 05 Dec 2016 14:11:18 +0300
+
+cocaine-plugins (0.12.10.10) unstable; urgency=low
+
+  * Fix: pass gauges to metrics output
+
+ -- Anton Matveenko <antmat@me.com>  Fri, 02 Dec 2016 17:02:18 +0300
+
+cocaine-plugins (0.12.10.9) unstable; urgency=low
+
+  * Fixed: use trace wrapper for logging (#79).
+
+ -- Evgeny Safronov <division494@gmail.com>  Fri, 02 Dec 2016 13:26:18 +0300
+
 cocaine-plugins (0.12.10.8) unstable; urgency=low
 
   * Added: new app metric - average queue depth.
