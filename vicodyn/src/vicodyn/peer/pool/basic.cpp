@@ -24,6 +24,8 @@ namespace pool {
 namespace ph = std::placeholders;
 
 namespace {
+/// Chooses random element in [begin, end), satisfying Predicate p
+/// Returns end in case end == begin or all elements are not satisfying predicate
 template<class Iterator, class Predicate>
 auto choose_random_if(Iterator begin, Iterator end, Predicate p) -> Iterator {
     size_t count = std::count_if(begin, end, p);
@@ -42,13 +44,16 @@ auto choose_random_if(Iterator begin, Iterator end, Predicate p) -> Iterator {
     return begin;
 }
 
+
+/// Debug purpose function for printing current remotes in pool
 auto print_remotes(const basic_t::remote_map_t& peers) -> std::string {
     std::ostringstream ss;
     ss << std::boolalpha << "[";
     for(auto peer_pair: peers) {
-        ss << peer_pair.first << ". connected: " << peer_pair.second.connected()
+        ss << peer_pair.first << "\n connected: " << peer_pair.second.connected()
                               << ", has peer: " << static_cast<bool>(peer_pair.second.peer)
-                              << ", active:" << peer_pair.second.active();
+                              << ", active:" << peer_pair.second.active()
+                              << "; \n";
     }
     ss << "]";
     return ss.str();
@@ -102,10 +107,12 @@ auto basic_t::choose_peer() -> std::pair<std::string, std::shared_ptr<peer_t>> {
             // this can happen when the proxy is shutting down
             throw error_t(error::service_not_available, "no active backend found");
         }
+        // First we try to choose connected peer
         auto it = choose_random_if(remote_map.begin(), remote_map.end(), [](const remote_map_t::value_type& p){
             return p.second.connected();
         });
         if(it == remote_map.end()) {
+            // No connected peer found - grab any and wait for connection to succeed
             it = choose_random_if(remote_map.begin(), remote_map.end(), [](const remote_map_t::value_type& p) {
                 return static_cast<bool>(p.second.peer);
             });

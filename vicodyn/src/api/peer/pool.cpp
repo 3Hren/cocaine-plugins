@@ -39,11 +39,7 @@ auto pool(context_t& context,
     if (!pool) {
         throw error_t(std::errc::argument_out_of_domain, "vicodyn pool component with name '{}' not found", pool_name);
     }
-    return context.repository().get<pool_t>(pool->type(),
-                                            context,
-                                            io_service,
-                                            service_name,
-                                            pool->args());
+    return context.repository().get<pool_t>(pool->type(), context, io_service, service_name, pool->args());
 }
 
 } // namespace peer
