@@ -40,6 +40,13 @@ struct metrics {
             return "fetch";
         }
 
+        typedef boost::mpl::vector<
+         /* Output type. Allowed plain (default) and json. */
+            optional<std::string>,
+         /* Query. */
+            optional<dynamic_t>
+        >::type argument_type;
+
         typedef option_of<
             dynamic_t
         >::tag upstream_type;

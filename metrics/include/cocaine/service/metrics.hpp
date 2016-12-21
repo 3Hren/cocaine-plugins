@@ -30,10 +30,15 @@
 #include <cocaine/idl/metrics.hpp>
 #include <cocaine/rpc/dispatch.hpp>
 
+#include "metrics/fwd.hpp"
+
 namespace cocaine {
 namespace service {
 
-class metrics_t : public api::service_t, public dispatch<io::metrics_tag> {
+class metrics_t :
+    public api::service_t,
+    public dispatch<io::metrics_tag>
+{
 public:
     metrics_t(context_t& context,
               asio::io_service& asio,
@@ -45,11 +50,13 @@ public:
     }
 
     /// Returns metrics dump.
-    auto metrics() const -> dynamic_t;
+    auto metrics(std::string type, const dynamic_t& query) const -> dynamic_t;
 
 private:
-    metrics::registry_t& hub;
+    libmetrics::registry_t& hub;
     std::vector<api::sender_ptr> senders;
+
+    std::shared_ptr<metrics::factory_t> factory;
 };
 
 }  // namespace service
