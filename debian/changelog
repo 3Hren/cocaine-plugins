@@ -1,3 +1,13 @@
+cocaine-plugins (0.12.11-alpha1) unstable; urgency=low
+
+  * New release: 0.12.11
+  * Introduced authorization mechanics: auth middlewares for services.
+  * Zookeeper logs are now passed to blackhole instead of stderr.
+  * Metrics refactoring: tree-like output, tag query
+  * Vicodyn: virtual cocaine dynamic proxy
+
+ -- Anton Matveenko <antmat@me.com>  Wed, 21 Dec 2016 16:20:18 +0300
+
 cocaine-plugins (0.12.10.8) unstable; urgency=low
 
   * Added: new app metric - average queue depth.
