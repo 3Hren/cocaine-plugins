@@ -14,7 +14,7 @@ namespace cocaine {
 namespace vicodyn {
 
 proxy_t::proxy_t(context_t& context,
-                 std::shared_ptr<asio::io_service> _io_loop ,
+                 std::shared_ptr<asio::io_service> _io_loop,
                  const std::string& _name,
                  const dynamic_t& /*args*/,
                  unsigned int _version,

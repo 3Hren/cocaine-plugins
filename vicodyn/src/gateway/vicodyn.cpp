@@ -122,8 +122,9 @@ auto vicodyn_t::cleanup(const std::string& uuid) -> void {
             COCAINE_LOG_INFO(logger, "removed {} remote for service {}", uuid, it->first);
             if(it->second.proxy.empty()) {
                 it->second.actor->terminate();
+                auto name = it->first;
                 it = proxies.erase(it);
-                COCAINE_LOG_INFO(logger, "proxy for {} was shut down: no remotes left", it->first);
+                COCAINE_LOG_INFO(logger, "proxy for {} was shut down: no remotes left", name);
             } else {
                 it++;
             }
