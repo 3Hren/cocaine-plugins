@@ -41,9 +41,9 @@ struct metrics {
         }
 
         typedef boost::mpl::vector<
-         /* Output type. Allowed plain (default) and json. */
+         /* Output type. Allowed plain (default) and json tree. */
             optional<std::string>,
-         /* Query. */
+         /* Query AST. */
             optional<dynamic_t>
         >::type argument_type;
 
