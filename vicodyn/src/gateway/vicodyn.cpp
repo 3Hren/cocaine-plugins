@@ -98,6 +98,22 @@ auto vicodyn_t::consume(const std::string& uuid,
     });
 }
 
+auto vicodyn_t::cleanup(proxy_map_t& proxies, proxy_map_t::iterator it, const std::string uuid)
+    -> proxy_map_t::iterator
+{
+    it->second.proxy.deregister_real(uuid);
+    COCAINE_LOG_INFO(logger, "removed {} remote for service {}", uuid, it->first);
+    if(it->second.proxy.empty()) {
+        it->second.actor->terminate();
+        auto name = it->first;
+        it = proxies.erase(it);
+        COCAINE_LOG_INFO(logger, "proxy for {} was shut down: no remotes left", name);
+    } else {
+        it++;
+    }
+    return it;
+}
+
 auto vicodyn_t::cleanup(const std::string& uuid, const std::string& name) -> void {
     proxy_map.apply([&](proxy_map_t& proxies){
         auto it = proxies.find(name);
@@ -105,29 +121,14 @@ auto vicodyn_t::cleanup(const std::string& uuid, const std::string& name) -> voi
             COCAINE_LOG_ERROR(logger, "remote service {} from {} scheduled for removal not found in vicodyn", name, uuid);
             return;
         }
-        it->second.proxy.deregister_real(uuid);
-        COCAINE_LOG_INFO(logger, "removed {} remote for service {}", uuid, name);
-        if(it->second.proxy.empty()) {
-            it->second.actor->terminate();
-            proxies.erase(it);
-            COCAINE_LOG_INFO(logger, "proxy for {} was shut down: no remotes left", name);
-        }
+        cleanup(proxies, it, uuid);
     });
 }
 
 auto vicodyn_t::cleanup(const std::string& uuid) -> void {
     proxy_map.apply([&](proxy_map_t& proxies) {
         for (auto it = proxies.begin(); it != proxies.end();) {
-            it->second.proxy.deregister_real(uuid);
-            COCAINE_LOG_INFO(logger, "removed {} remote for service {}", uuid, it->first);
-            if(it->second.proxy.empty()) {
-                it->second.actor->terminate();
-                auto name = it->first;
-                it = proxies.erase(it);
-                COCAINE_LOG_INFO(logger, "proxy for {} was shut down: no remotes left", name);
-            } else {
-                it++;
-            }
+            it = cleanup(proxies, it, uuid);
         }
     });
 }

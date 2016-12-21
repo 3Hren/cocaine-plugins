@@ -58,6 +58,8 @@ private:
     // map an unchanged service name to proxy, which balances requests across peers
     typedef std::map<std::string, proxy_description_t> proxy_map_t;
 
+    auto cleanup(proxy_map_t& map, proxy_map_t::iterator it, const std::string uuid) -> proxy_map_t::iterator;
+
     context_t& context;
     std::string local_uuid;
     std::unique_ptr<logging::logger_t> logger;
