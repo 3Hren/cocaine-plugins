@@ -62,11 +62,11 @@ metrics_t::metrics_t(context_t& context,
     // make_type(out_type);
 
     const auto out_type = std::string("json");
-    const auto filter_ast = args.as_object().at("filter_ast", dynamic_t::null );
+    const auto filter_ast = args.as_object().at("filter_ast", dynamic_t::null);
 
     for(auto& sender_name: sender_names) {
         api::sender_t::data_provider_ptr provider(new api::sender_t::function_data_provider_t([=]() {
-            return metrics( out_type, filter_ast);
+            return metrics(out_type, filter_ast);
         }));
         senders.push_back(api::sender(context, asio, sender_name.as_string(), std::move(provider)));
     }
