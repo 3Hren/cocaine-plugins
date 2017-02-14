@@ -58,7 +58,7 @@ machine_t::metrics_t::metrics_t(context_t& context, std::shared_ptr<machine_t> p
     uptime(context.metrics_hub().register_gauge<std::uint64_t>(format("{}.uptime", prefix), {}, [=] {
         return parent->uptime().count();
     })),
-    concurrency(context.metrics_hub().register_gauge<double>(format("{}.concurrency", prefix), {}, [=] {
+    load(context.metrics_hub().register_gauge<double>(format("{}.load", prefix), {}, [=] {
       parent->load_metric().add(parent->load());
       return parent->load_metric().get();
     }))

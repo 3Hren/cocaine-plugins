@@ -109,7 +109,7 @@ private:
 
         metrics::shared_metric<metrics::gauge<std::string>> state;
         metrics::shared_metric<metrics::gauge<std::uint64_t>> uptime;
-        metrics::shared_metric<metrics::gauge<double>> concurrency;
+        metrics::shared_metric<metrics::gauge<double>> load;
 
         metrics_t(context_t& context, std::shared_ptr<machine_t> parent);
     };
