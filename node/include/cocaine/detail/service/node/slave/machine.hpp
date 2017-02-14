@@ -120,22 +120,22 @@ private:
 
     struct metrics_data_t {
 
-      metrics_data_t();
+        metrics_data_t();
 
-      void
-      update_concurrency(const double &v) {
-        concurrency->add(v);
-      }
+        void
+        update_load(const double &v) {
+            concurrency->add(v);
+        }
 
-      double
-      get_concurrency() const {
-        return concurrency->get();
-      }
+        double
+        get_load() const {
+            return concurrency->get();
+        }
 
-      ewma_type &
-      get_ewma_ref() {
-        return *concurrency;
-      }
+        ewma_type &
+        ewma() {
+            return *concurrency;
+        }
 
     private:
       std::unique_ptr<ewma_type> concurrency;
@@ -216,7 +216,7 @@ private:
     dump();
 
     ewma_type &
-    concurrency();
+    load_metric();
 };
 
 }  // namespace slave
