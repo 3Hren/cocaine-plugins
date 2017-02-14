@@ -50,6 +50,13 @@ using detail::service::node::slave::state::inactive_t;
 using cocaine::detail::service::node::slave::stats_t;
 using cocaine::service::node::slave::id_t;
 
+namespace {
+  // TODO: move to some config with defaults?
+  const auto DEFAULT_EWMA_DURATION_5s = std::chrono::seconds(5);
+  const auto DURATION_10s = std::chrono::seconds(10);
+  const auto DURATION_60s = std::chrono::seconds(60);
+} // namespace
+
 machine_t::metrics_t::metrics_t(context_t& context, std::shared_ptr<machine_t> parent) :
     prefix(cocaine::format("{}.pool.slaves.{}", parent->manifest.name, parent->id.id())),
     state(context.metrics_hub().register_gauge<std::string>(format("{}.state", prefix), {}, [=] {
@@ -57,6 +64,10 @@ machine_t::metrics_t::metrics_t(context_t& context, std::shared_ptr<machine_t> p
     })),
     uptime(context.metrics_hub().register_gauge<std::uint64_t>(format("{}.uptime", prefix), {}, [=] {
         return parent->uptime().count();
+    })),
+    concurrency(context.metrics_hub().register_gauge<double>(format("{}.concurrency", prefix), {}, [=] {
+      parent->concurrency().add(parent->load());
+      return parent->concurrency().get();
     }))
 {}
 
@@ -237,6 +248,8 @@ auto machine_t::inject(load_t& load, channel_handler handler) -> std::uint64_t {
         });
     }
 
+    metrics_data.update_concurrency(current);
+
     COCAINE_LOG_DEBUG(log, "slave has started processing {} channel", id);
 
     COCAINE_LOG_DEBUG(log, "slave has increased its load to {}", current, attribute_list({{"channel", id}}));
@@ -344,6 +357,7 @@ machine_t::shutdown(std::error_code ec) {
         channels.clear();
     });
 
+    metrics_data.update_concurrency(0.0);
 
     // Check if the slave has been terminated externally. If so, do not call the cleanup callback.
     if (closed) {
@@ -372,6 +386,8 @@ machine_t::revoke(std::uint64_t id, channel_handler handler) {
     data.timers.apply([&](timers_map_t& timers) {
         timers.erase(id);
     });
+
+    metrics_data.update_concurrency(load);
 
     COCAINE_LOG_DEBUG(log, "slave has decreased its load to {}", load, attribute_list({{"channel", id}}));
     COCAINE_LOG_DEBUG(log, "slave has closed its {} channel", id);
@@ -432,6 +448,17 @@ machine_t::dump() {
         }
     });
 }
+
+machine_t::ewma_type &
+machine_t::concurrency() {
+  return metrics_data.get_ewma_ref();
+}
+
+machine_t::metrics_data_t::metrics_data_t() {
+   concurrency.reset(new machine_t::ewma_type(DURATION_10s));
+   update_concurrency(0.0);
+}
+
 
 }  // namespace slave
 }  // namespace node
