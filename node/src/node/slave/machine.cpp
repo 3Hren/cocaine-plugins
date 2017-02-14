@@ -442,7 +442,7 @@ machine_t::dump() {
     });
 }
 
-machine_t::ewma_type &
+machine_t::ewma_type&
 machine_t::load_metric() {
     return metrics_data.ewma();
 }

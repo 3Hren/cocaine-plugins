@@ -215,7 +215,7 @@ private:
     void
     dump();
 
-    ewma_type &
+    ewma_type&
     load_metric();
 };
 
