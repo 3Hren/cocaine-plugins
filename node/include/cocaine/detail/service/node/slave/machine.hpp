@@ -118,28 +118,8 @@ private:
 
     typedef metrics::usts::ewma_t ewma_type;
 
-    struct metrics_data_t {
-
-        metrics_data_t();
-
-        void
-        update_load(const double &v) {
-            concurrency->add(v);
-        }
-
-        double
-        get_load() const {
-            return concurrency->get();
-        }
-
-        ewma_type &
-        ewma() {
-            return *concurrency;
-        }
-
-    private:
-      std::unique_ptr<ewma_type> concurrency;
-
+    struct {
+        std::unique_ptr<ewma_type> load;
     } metrics_data;
 
 public:

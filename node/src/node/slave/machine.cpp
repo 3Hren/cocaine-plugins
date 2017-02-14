@@ -59,8 +59,8 @@ machine_t::metrics_t::metrics_t(context_t& context, std::shared_ptr<machine_t> p
         return parent->uptime().count();
     })),
     load(context.metrics_hub().register_gauge<double>(format("{}.load", prefix), {}, [=] {
-      parent->load_metric().add(parent->load());
-      return parent->load_metric().get();
+        parent->load_metric().add(parent->load());
+        return parent->load_metric().get();
     }))
 {}
 
@@ -86,6 +86,9 @@ machine_t::machine_t(context_t& context,
     birthstamp(clock_type::now()),
     metrics(nullptr)
 {
+    metrics_data.load.reset(new machine_t::ewma_type(std::chrono::seconds(10)));
+    metrics_data.load->add(0.0);
+
     COCAINE_LOG_DEBUG(log, "slave state machine has been initialized");
 }
 
@@ -241,7 +244,7 @@ auto machine_t::inject(load_t& load, channel_handler handler) -> std::uint64_t {
         });
     }
 
-    metrics_data.update_load(current);
+    metrics_data.load->add(current);
 
     COCAINE_LOG_DEBUG(log, "slave has started processing {} channel", id);
 
@@ -350,7 +353,7 @@ machine_t::shutdown(std::error_code ec) {
         channels.clear();
     });
 
-    metrics_data.update_load(0.0);
+    metrics_data.load->add(0.0);
 
     // Check if the slave has been terminated externally. If so, do not call the cleanup callback.
     if (closed) {
@@ -380,7 +383,7 @@ machine_t::revoke(std::uint64_t id, channel_handler handler) {
         timers.erase(id);
     });
 
-    metrics_data.update_load(load);
+    metrics_data.load->add(load);
 
     COCAINE_LOG_DEBUG(log, "slave has decreased its load to {}", load, attribute_list({{"channel", id}}));
     COCAINE_LOG_DEBUG(log, "slave has closed its {} channel", id);
@@ -444,14 +447,8 @@ machine_t::dump() {
 
 machine_t::ewma_type&
 machine_t::load_metric() {
-    return metrics_data.ewma();
+    return *metrics_data.load;
 }
-
-machine_t::metrics_data_t::metrics_data_t() {
-    concurrency.reset(new machine_t::ewma_type(std::chrono::seconds(10)));
-    update_load(0.0);
-}
-
 
 }  // namespace slave
 }  // namespace node
