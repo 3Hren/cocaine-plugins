@@ -209,6 +209,8 @@ auto machine_t::inject(load_t& load, channel_handler handler) -> std::uint64_t {
         return channels.size();
     });
 
+    metrics_data.load->add(current);
+
     std::chrono::milliseconds request_timeout(profile.request_timeout());
     if (auto timeout_from_header = hpack::header::convert_first<std::uint64_t>(load.event.headers, "request_timeout")) {
         request_timeout = std::chrono::milliseconds(*timeout_from_header);
@@ -243,8 +245,6 @@ auto machine_t::inject(load_t& load, channel_handler handler) -> std::uint64_t {
             from_worker_dispatch->discard(error::timeout_error);
         });
     }
-
-    metrics_data.load->add(current);
 
     COCAINE_LOG_DEBUG(log, "slave has started processing {} channel", id);
 
@@ -379,11 +379,12 @@ machine_t::revoke(std::uint64_t id, channel_handler handler) {
         channels.erase(id);
         return channels.size();
     });
+
+    metrics_data.load->add(load);
+
     data.timers.apply([&](timers_map_t& timers) {
         timers.erase(id);
     });
-
-    metrics_data.load->add(load);
 
     COCAINE_LOG_DEBUG(log, "slave has decreased its load to {}", load, attribute_list({{"channel", id}}));
     COCAINE_LOG_DEBUG(log, "slave has closed its {} channel", id);
