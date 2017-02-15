@@ -59,8 +59,10 @@ machine_t::metrics_t::metrics_t(context_t& context, std::shared_ptr<machine_t> p
         return parent->uptime().count();
     })),
     load(context.metrics_hub().register_gauge<double>(format("{}.load", prefix), {}, [=] {
-        parent->load_metric().add(parent->load());
-        return parent->load_metric().get();
+        return parent->data.channels.apply( [&](channels_map_t& channels) {
+            parent->load_metric().add(channels.size());
+            return parent->load_metric().get();
+        });
     }))
 {}
 
@@ -206,10 +208,13 @@ auto machine_t::inject(load_t& load, channel_handler handler) -> std::uint64_t {
 
     const auto current = data.channels.apply([&](channels_map_t& channels) -> std::uint64_t {
         channels[id] = channel;
-        return channels.size();
+
+        const auto load = channels.size();
+        metrics_data.load->add(load);
+
+        return load;
     });
 
-    metrics_data.load->add(current);
 
     std::chrono::milliseconds request_timeout(profile.request_timeout());
     if (auto timeout_from_header = hpack::header::convert_first<std::uint64_t>(load.event.headers, "request_timeout")) {
@@ -351,9 +356,8 @@ machine_t::shutdown(std::error_code ec) {
         }
 
         channels.clear();
+        metrics_data.load->add(channels.size());
     });
-
-    metrics_data.load->add(0.0);
 
     // Check if the slave has been terminated externally. If so, do not call the cleanup callback.
     if (closed) {
@@ -377,10 +381,12 @@ void
 machine_t::revoke(std::uint64_t id, channel_handler handler) {
     const auto load = data.channels.apply([&](channels_map_t& channels) -> std::uint64_t {
         channels.erase(id);
-        return channels.size();
-    });
 
-    metrics_data.load->add(load);
+        const auto load = channels.size();
+        metrics_data.load->add(load);
+
+        return load;
+    });
 
     data.timers.apply([&](timers_map_t& timers) {
         timers.erase(id);
