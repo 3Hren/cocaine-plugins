@@ -60,8 +60,8 @@ machine_t::metrics_t::metrics_t(context_t& context, std::shared_ptr<machine_t> p
     })),
     load(context.metrics_hub().register_gauge<double>(format("{}.load", prefix), {}, [=] {
         return parent->data.channels.apply( [&](channels_map_t& channels) {
-            parent->load_metric().add(channels.size());
-            return parent->load_metric().get();
+            parent->metrics_data.load->add(channels.size());
+            return parent->metrics_data.load->get();
         });
     }))
 {}
@@ -450,11 +450,6 @@ machine_t::dump() {
             COCAINE_LOG_WARNING(self->log, "slave is unable to save the crashlog: {}", e.what());
         }
     });
-}
-
-machine_t::ewma_type&
-machine_t::load_metric() {
-    return *metrics_data.load;
 }
 
 }  // namespace slave

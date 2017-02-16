@@ -194,9 +194,6 @@ private:
 
     void
     dump();
-
-    ewma_type&
-    load_metric();
 };
 
 }  // namespace slave
