@@ -104,8 +104,8 @@ void emit(std::shared_ptr<logging::metafilter_t> filter,
     emit_ack(filter, backend, log, severity, message, attributes);
 }
 
-
 }
+
 struct logging_v2_t::impl_t {
 
     typedef logging::filter_t::deadline_t deadline_t;
@@ -181,7 +181,7 @@ struct logging_v2_t::impl_t {
                                   error::to_string(e));
             }
         }
-        scopes.apply([&](std::unordered_map<size_t, api::unicorn_scope_ptr>& _scopes) {
+        scopes.apply([&](unicorn_scopes_t& _scopes) {
             _scopes.erase(scope_id);
         });
     }
@@ -201,7 +201,7 @@ struct logging_v2_t::impl_t {
                               filter_id,
                               error::to_string(e));
         }
-        scopes.apply([&](std::unordered_map<size_t, api::unicorn_scope_ptr>& _scopes) {
+        scopes.apply([&](unicorn_scopes_t& _scopes) {
             _scopes.erase(scope_id);
         });
     }
@@ -212,8 +212,7 @@ struct logging_v2_t::impl_t {
             auto filter_value = filter_future.get();
             COCAINE_LOG_DEBUG(internal_logger, "received filter update for id {} ", filter_id);
             if (filter_value.version() == unicorn::not_existing_version) {
-                bool removed = metafilters.apply(
-                [&](std::map<std::string, std::shared_ptr<logging::metafilter_t>>& mf) -> bool {
+                bool removed = metafilters.apply([&](metafilters_t& mf) -> bool {
                     for (auto& mf_pair : mf) {
                         if(mf_pair.second->remove_filter(filter_id)) {
                             return true;
@@ -226,8 +225,7 @@ struct logging_v2_t::impl_t {
                 }
             } else {
                 logging::filter_info_t info(filter_value.value());
-                auto metafilter = metafilters.apply(
-                [&](std::map<std::string, std::shared_ptr<logging::metafilter_t>>& mf) {
+                auto metafilter = metafilters.apply([&](metafilters_t& mf) {
                     auto& ret = mf[info.logger_name];
                     if (ret == nullptr) {
                         std::unique_ptr<logging::logger_t> mf_logger(new blackhole::wrapper_t(
@@ -306,24 +304,15 @@ struct logging_v2_t::impl_t {
 
     deferred<bool> remove_filter(logging::filter_t::id_type id) {
         deferred<bool> result;
-        auto cb = [=](std::future<response::del> future) mutable {
-            metafilters.apply([=](std::map<std::string, std::shared_ptr<logging::metafilter_t>>& mfs) mutable {
-                for (auto& metafilter_pair : mfs) {
-                    if (metafilter_pair.second->remove_filter(id)) {
-                        result.write(true);
-                        return;
-                    }
+        metafilters.apply([=](std::map<std::string, std::shared_ptr<logging::metafilter_t>>& mfs) mutable {
+            for(auto& metafilter_pair : mfs) {
+                if(metafilter_pair.second->remove_filter(id)) {
+                    result.write(true);
+                    return;
                 }
-                result.write(false);
-            });
-            try {
-                future.get();
-            } catch (const std::system_error& e) {
-                //TODO check code for nonode, retry
             }
-        };
-        auto path = filter_unicorn_path + format("/%llu", id);
-        unicorn->del(std::move(cb), path, unicorn::not_existing_version);
+            result.write(false);
+        });
         return result;
     }
 
@@ -377,6 +366,18 @@ struct logging_v2_t::impl_t {
                 std::unique_ptr<logging::logger_t> mf_logger(new blackhole::wrapper_t(
                 *(internal_logger), {{"metafilter", name}}));
                 metafilter = std::make_shared<logging::metafilter_t>(std::move(mf_logger));
+                metafilter->on_filter_expiration([&](const logging::filter_info_t& info) {
+                    if(info.disposition == logging::filter_t::disposition_t::cluster) {
+                        auto path = filter_unicorn_path + format("/%llu", info.id);
+                        unicorn->del([=](std::future<response::del> future){
+                            try {
+                                future.get();
+                            } catch (const std::exception& e) {
+                                COCAINE_LOG_WARNING(internal_logger, "failed to remove filter from ZK");
+                            }
+                        }, path, unicorn::not_existing_version);
+                    }
+                });
             }
             return metafilter;
         });
@@ -386,12 +387,16 @@ struct logging_v2_t::impl_t {
     std::unique_ptr<bh::root_logger_t> root_logger;
     logging::trace_wrapper_t logger;
     std::shared_ptr<dispatch<io::context_tag>> signal_dispatcher;
-    synchronized<std::map<std::string, std::shared_ptr<logging::metafilter_t>>> metafilters;
+
+    using metafilters_t = std::map<std::string, std::shared_ptr<logging::metafilter_t>>;
+    synchronized<metafilters_t> metafilters;
     synchronized<std::mt19937_64> generator;
     api::unicorn_ptr unicorn;
     std::atomic_ulong scope_counter;
     std::string filter_unicorn_path;
-    synchronized<std::unordered_map<size_t, api::unicorn_scope_ptr>> scopes;
+
+    using unicorn_scopes_t = std::unordered_map<size_t, api::unicorn_scope_ptr>;
+    synchronized<unicorn_scopes_t> scopes;
     api::unicorn_scope_ptr list_scope;
     asio::deadline_timer retry_timer;
 };
@@ -443,12 +448,10 @@ public:
     virtual boost::optional<std::shared_ptr<const dispatch_type>> operator()(const std::vector<hpack::header_t>&,
                                                                              tuple_type&& args,
                                                                              upstream_type&& upstream) {
-        bool result = emit_ack(parent.filter,
-                               parent.backend,
-                               parent.log,
-                               std::get<0>(args),
-                               std::get<1>(args),
-                               std::get<2>(args));
+        auto severity = std::get<0>(args);
+        auto& message = std::get<1>(args);
+        auto& attributes = std::get<2>(args);g
+        bool result = emit_ack(parent.filter, parent.backend, parent.log, severity, message, attributes);
         if(need_ack) {
             upstream.template send<typename protocol::chunk>(result);
         }

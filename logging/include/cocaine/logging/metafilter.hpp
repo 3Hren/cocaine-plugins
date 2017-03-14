@@ -53,7 +53,9 @@ public:
 
     typedef std::function<void(const logging::filter_info_t&)> callable_t;
 
-    void each(const callable_t& visitor) const;
+    void each(const callable_t& fn) const;
+
+    void on_filter_expiration(callable_t callback);
 
     struct counter_t {
         size_t accepted;
@@ -71,6 +73,9 @@ private:
 
     std::unique_ptr<logger_t> logger;
     std::vector<filter_info_t> filters;
+
+    callable_t expiration_callback;
+
     mutable boost::shared_mutex mutex;
 };
 }

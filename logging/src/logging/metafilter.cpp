@@ -54,6 +54,9 @@ bool metafilter_t::remove_filter(filter_t::id_type filter_id) {
     if(removed) {
         since_change_accepted_cnt.store(0);
         since_change_rejected_cnt.store(0);
+        if(expiration_callback) {
+            expiration_callback(*it);
+        }
         filters.erase(it);
     }
 
@@ -95,11 +98,17 @@ filter_result_t metafilter_t::apply(blackhole::severity_t severity,
     return result;
 }
 
-void metafilter_t::each(const callable_t& visitor) const {
+void metafilter_t::each(const callable_t& fn) const {
     boost::shared_lock<boost::shared_mutex> guard(mutex);
     for (const auto& filter_info : filters) {
-        visitor(filter_info);
+        fn(filter_info);
     }
 }
+
+void metafilter_t::on_filter_expiration(callable_t callback) {
+    std::lock_guard<boost::shared_mutex> guard(mutex);
+    expiration_callback = std::move(callback);
+}
+
 }
 }  // namespace cocaine::logging
