@@ -47,7 +47,7 @@ public:
 
     void add_filter(filter_info_t filter);
 
-    bool remove_filter(filter_t::id_type filter_id);
+    bool remove_filter(filter_t::id_t filter_id);
 
     bool empty() const;
 
