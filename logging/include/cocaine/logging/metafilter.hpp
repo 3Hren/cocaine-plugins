@@ -55,8 +55,6 @@ public:
 
     void each(const callable_t& fn) const;
 
-    void on_filter_expiration(callable_t callback);
-
     struct counter_t {
         size_t accepted;
         size_t rejected;
@@ -73,8 +71,6 @@ private:
 
     std::unique_ptr<logger_t> logger;
     std::vector<filter_info_t> filters;
-
-    callable_t expiration_callback;
 
     mutable boost::shared_mutex mutex;
 };

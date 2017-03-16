@@ -54,9 +54,6 @@ bool metafilter_t::remove_filter(filter_t::id_t filter_id) {
     if(removed) {
         since_change_accepted_cnt.store(0);
         since_change_rejected_cnt.store(0);
-        if(expiration_callback) {
-            expiration_callback(*it);
-        }
         filters.erase(it);
     }
 
@@ -103,11 +100,6 @@ void metafilter_t::each(const callable_t& fn) const {
     for (const auto& filter_info : filters) {
         fn(filter_info);
     }
-}
-
-void metafilter_t::on_filter_expiration(callable_t callback) {
-    std::lock_guard<boost::shared_mutex> guard(mutex);
-    expiration_callback = std::move(callback);
 }
 
 }

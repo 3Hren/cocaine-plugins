@@ -28,8 +28,7 @@ INVALID_PATH = 6
 VERSION_NOT_ALLOWED = 7
 
 def new_unicorn
-  #Cocaine::Service.new(:unicorn, [[Default::Locator.host, Default::Locator.port]])
-  Cocaine::Service.new(:unicorn, [["2a02:6b8:b010:3016::db8", 10053]])
+  Cocaine::Service.new(:unicorn, [[Default::Locator.host, Default::Locator.port]])
 end
 
 def node_gen
