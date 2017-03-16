@@ -247,14 +247,14 @@ filter_info_t::filter_info_t(filter_t _filter,
       logger_name(std::move(_logger_name)) {}
 
 filter_info_t::filter_info_t(const dynamic_t& value) {
-    auto throw_error = [&] {
+    const auto throw_error = [&] {
         throw cocaine::error_t("invalid representation for filter info - {}", boost::lexical_cast<std::string>(value));
     };
     if (!value.is_object()) {
         throw_error();
     }
     const auto& obj = value.as_object();
-    static std::vector<std::string> required_keys({"filter", "deadline", "id", "logger_name", "disposition"});
+    static const std::vector<std::string> required_keys {"filter", "deadline", "id", "logger_name", "disposition"};
     for(const auto& key: required_keys) {
         if(!obj.count(key)) {
             throw_error();

@@ -152,11 +152,7 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
             } else {
                 result = core_mf->apply(sev, pack);
             }
-            if(result == logging::filter_result_t::accept) {
-                return true;
-            } else {
-                return false;
-            }
+            return result == logging::filter_result_t::accept;
         });
         context.logger_filter(std::move(core_filter));
 
@@ -214,7 +210,7 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
                 auto filter_value = filter_future.get();
                 COCAINE_LOG_DEBUG(internal_logger, "received filter update for id {} ", filter_id);
 
-                if(filter_value.version() == unicorn::not_existing_version) {
+                if(!filter_value.exists()) {
                     remove();
                 } else {
                     try {
@@ -228,8 +224,8 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
                             metafilter->add_filter(std::move(info));
                         }
                     } catch (const std::system_error& e) {
-                        COCAINE_LOG_ERROR(internal_logger, "can not parse filter value {} - erasing {}",
-                                          boost::lexical_cast<std::string>(filter_value.value()), filter_id);
+                        COCAINE_LOG_ERROR(internal_logger, "can not parse filter value, erasing filter {} from unicorn - {}",
+                                          filter_id, error::to_string(e));
                         remove_from_unicorn(filter_path(filter_id));
                     }
                 }
@@ -250,7 +246,7 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
                     try {
                         filter_id = std::stoull(id_str);
                     } catch (const std::exception& e) {
-                        COCAINE_LOG_ERROR(internal_logger, "invalid filter key {}, removing", id_str);
+                        COCAINE_LOG_ERROR(internal_logger, "invalid filter key {} - {}, removing", id_str, e.what());
                         remove_from_unicorn(filter_unicorn_path + "/" + id_str);
                         continue;
                     }
