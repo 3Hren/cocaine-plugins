@@ -123,7 +123,7 @@ public:
                     {"code", ec.value()},
                     {"error", ec.message()},
                 });
-                upstream.template send<typename protocol::error>(ec);
+                upstream.template send<typename protocol::error>(ec, ec.message());
                 return;
             }
 
