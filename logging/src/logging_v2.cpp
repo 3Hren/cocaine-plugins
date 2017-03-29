@@ -200,10 +200,19 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
 
     auto cleanup(const std::error_code& ec) -> void {
         if(!ec) {
-            COCAINE_LOG_DEBUG(logger, "cleaning up metafilters");
+            COCAINE_LOG_DEBUG(internal_logger, "cleaning up metafilters");
             metafilters.apply([&](metafilters_t& metafilters){
+                // TODO: I have no idea how to iterative cleanup this concrete implementation of radix_tree,
+                // so we use simple but slow implementation of empty metafilters cleanup
+                std::vector<std::string> empty;
                 for(auto& mf_pair: metafilters) {
                     mf_pair.second->cleanup();
+                    if(mf_pair.second->empty()){
+                        empty.push_back(mf_pair.first);
+                    }
+                }
+                for(auto& empty_item: empty) {
+                    metafilters.erase(empty_item);
                 }
             });
             cleanup_timer.expires_from_now(boost::posix_time::seconds(1));
@@ -429,7 +438,7 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
 
     auto find_metafilter(const std::string& name) -> std::shared_ptr<logging::metafilter_t> {
         auto mf = metafilters.apply([&](metafilters_t& _metafilters) -> std::shared_ptr<logging::metafilter_t> {
-            COCAINE_LOG_DEBUG(logger, "looking up longest match for {}", name);
+            COCAINE_LOG_DEBUG(internal_logger, "looking up longest match for {}", name);
             auto it = _metafilters.longest_match(name);
             if(it == _metafilters.end() || it->second->empty()) {
                 return nullptr;
