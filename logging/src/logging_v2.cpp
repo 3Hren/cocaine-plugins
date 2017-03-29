@@ -113,7 +113,7 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
     using deadline_t = filter_t::deadline_t;
     using representation_t = filter_t::representation_t;
 
-    using filter_list_tuple_t = std::tuple<std::string, representation_t, id_t, disposition_t>;
+    using filter_list_tuple_t = std::tuple<std::string, representation_t, id_t, uint64_t, disposition_t>;
     using filter_list_storage_t = std::vector<filter_list_tuple_t>;
 
     static constexpr size_t retry_time_seconds = 5;
@@ -128,7 +128,8 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
         generator(std::random_device()()),
         unicorn(api::unicorn(context, "core")),
         filter_unicorn_path(config.as_object().at("unicorn_path", "/cocaine/logging_v2/filters").as_string()),
-        retry_timer(io_context)
+        retry_timer(io_context),
+        cleanup_timer(io_context)
     {
         auto default_mf = get_default_metafilter();
         auto default_metafilter_conf = config.as_object().at("default_metafilter").as_array();
@@ -165,6 +166,7 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
             }
         });
         context.signal_hub().listen(signal_dispatcher, io_context);
+        cleanup({});
     }
 
     template <class T, class F>
@@ -194,6 +196,19 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
     template<class F>
     auto safe(F&& f) -> safe_t<impl_t, F> {
         return safe_impl(std::weak_ptr<impl_t>(shared_from_this()), std::forward<F>(f));
+    }
+
+    auto cleanup(const std::error_code& ec) -> void {
+        if(!ec) {
+            COCAINE_LOG_DEBUG(logger, "cleaning up metafilters");
+            metafilters.apply([&](metafilters_t& metafilters){
+                for(auto& mf_pair: metafilters) {
+                    mf_pair.second->cleanup();
+                }
+            });
+            cleanup_timer.expires_from_now(boost::posix_time::seconds(1));
+            cleanup_timer.async_wait([&](const std::error_code& ec){ cleanup(ec);});
+        }
     }
 
     auto load_filters() -> void {
@@ -402,7 +417,8 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
             filter_list_storage_t storage;
 
             auto callable = [&](const logging::filter_info_t& info) {
-                storage.push_back(std::make_tuple(info.logger_name, info.filter.representation(), info.id, info.disposition));
+                auto ts = clock_t::to_time_t(info.deadline);
+                storage.push_back(std::make_tuple(info.logger_name, info.filter.representation(), info.id, ts, info.disposition));
             };
             for (auto& metafilter_pair : mfs) {
                 metafilter_pair.second->each(callable);
@@ -412,14 +428,20 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
     }
 
     auto find_metafilter(const std::string& name) -> std::shared_ptr<logging::metafilter_t> {
-        return metafilters.apply([&](metafilters_t& _metafilters) {
+        auto mf = metafilters.apply([&](metafilters_t& _metafilters) -> std::shared_ptr<logging::metafilter_t> {
+            COCAINE_LOG_DEBUG(logger, "looking up longest match for {}", name);
             auto it = _metafilters.longest_match(name);
             if(it == _metafilters.end() || it->second->empty()) {
-                return get_default_metafilter();
+                return nullptr;
             } else {
                 return it->second;
             }
         });
+        if(mf) {
+            return mf;
+        } else {
+            return get_default_metafilter();
+        }
     }
 
     auto get_default_metafilter() -> std::shared_ptr<logging::metafilter_t> {
@@ -459,6 +481,7 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
     api::unicorn_scope_ptr create_scope;
     synchronized<unicorn_scopes_t> scopes;
     asio::deadline_timer retry_timer;
+    asio::deadline_timer cleanup_timer;
 };
 
 const std::string logging_v2_t::impl_t::default_key("default");
@@ -491,7 +514,7 @@ logging_v2_t::logging_v2_t(context_t& context, asio::io_service& asio, const std
     using get_slot_t = io::basic_slot<get>;
     on<get>([&](const hpack::headers_t&, get_slot_t::tuple_type&& args, get_slot_t::upstream_type&&){
         auto mf_name = std::get<0>(args);
-        auto metafilter = d->get_metafilter(mf_name);
+        auto metafilter = d->find_metafilter(mf_name);
         auto dispatch = std::make_shared<named_logging_t>(d->logger, std::move(mf_name), std::move(metafilter));
         return get_slot_t::result_type(std::move(dispatch));
     });
