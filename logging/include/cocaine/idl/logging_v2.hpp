@@ -266,6 +266,7 @@ struct protocol<named_log_tag> {
 
     typedef boost::mpl::list<named_log::emit, named_log::emit_ack>::type messages;
 
+    typedef named_log_tag transition_type;
     typedef named_log scope;
 };
 }

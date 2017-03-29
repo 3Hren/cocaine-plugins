@@ -50,6 +50,8 @@
 #include <cocaine/traits/vector.hpp>
 #include <cocaine/unicorn/value.hpp>
 
+#include "../foreign/radix_tree/radix_tree.hpp"
+
 #include <random>
 #include <cocaine/detail/zookeeper/errors.hpp>
 
@@ -312,9 +314,9 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
         return filter_unicorn_path + format("/{}", id);
     }
 
-    auto list_loggers() const -> std::vector<std::string> {
+    auto list_loggers() -> std::vector<std::string> {
         std::vector<std::string> result;
-        metafilters.apply([&](const std::map<std::string, std::shared_ptr<logging::metafilter_t>>& mf) {
+        metafilters.apply([&](metafilters_t& mf) {
             result.reserve(mf.size());
             for (auto& pair : mf) {
                 result.push_back(pair.first);
@@ -385,7 +387,7 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
     }
 
     auto remove_local_filter(id_t id) -> bool {
-        return metafilters.apply([=](std::map<std::string, std::shared_ptr<logging::metafilter_t>>& mfs) mutable {
+        return metafilters.apply([=](metafilters_t& mfs) mutable {
             for(auto& metafilter_pair : mfs) {
                 if(metafilter_pair.second->remove_filter(id)) {
                     return true;
@@ -396,7 +398,7 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
     }
 
     auto list_filters() -> filter_list_storage_t {
-        return metafilters.apply([&](std::map<std::string, std::shared_ptr<logging::metafilter_t>>& mfs) {
+        return metafilters.apply([&](metafilters_t& mfs) {
             filter_list_storage_t storage;
 
             auto callable = [&](const logging::filter_info_t& info) {
@@ -409,12 +411,15 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
         });
     }
 
-    auto get_non_empty_metafilter(const std::string& name) -> std::shared_ptr<logging::metafilter_t> {
-        auto mf = get_metafilter(name);
-        if(mf->empty()) {
-            mf = get_metafilter(default_key);
-        }
-        return mf;
+    auto find_metafilter(const std::string& name) -> std::shared_ptr<logging::metafilter_t> {
+        return metafilters.apply([&](metafilters_t& _metafilters) {
+            auto it = _metafilters.longest_match(name);
+            if(it == _metafilters.end() || it->second->empty()) {
+                return get_default_metafilter();
+            } else {
+                return it->second;
+            }
+        });
     }
 
     auto get_default_metafilter() -> std::shared_ptr<logging::metafilter_t> {
@@ -426,7 +431,7 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
     }
 
     auto get_metafilter(const std::string& name) -> std::shared_ptr<logging::metafilter_t> {
-        return metafilters.apply([&](std::map<std::string, std::shared_ptr<logging::metafilter_t>>& _metafilters) {
+        return metafilters.apply([&](metafilters_t& _metafilters) {
             auto& metafilter = _metafilters[name];
             if (metafilter == nullptr) {
                 std::unique_ptr<logging::logger_t> mf_logger(new blackhole::wrapper_t(
@@ -442,7 +447,7 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
     logging::trace_wrapper_t logger;
     std::shared_ptr<dispatch<io::context_tag>> signal_dispatcher;
 
-    using metafilters_t = std::map<std::string, std::shared_ptr<logging::metafilter_t>>;
+    using metafilters_t = radix_tree<std::string, std::shared_ptr<logging::metafilter_t>>;
     synchronized<metafilters_t> metafilters;
     mutable synchronized<std::mt19937_64> generator;
     api::unicorn_ptr unicorn;
@@ -473,13 +478,13 @@ logging_v2_t::logging_v2_t(context_t& context, asio::io_service& asio, const std
     on<io::base_log::emit>([&](uint severity, const std::string& backend, const std::string& message,
                                const attributes_t& attributes)
     {
-        emit(d->get_non_empty_metafilter(backend), backend, d->logger, severity, message, attributes);
+        emit(d->find_metafilter(backend), backend, d->logger, severity, message, attributes);
     });
 
     on<io::base_log::emit_ack>([&](uint severity, const std::string& backend, const std::string& message,
                                    const attributes_t& attributes)
     {
-        return emit_ack(d->get_non_empty_metafilter(backend), backend, d->logger, severity, message, attributes);
+        return emit_ack(d->find_metafilter(backend), backend, d->logger, severity, message, attributes);
     });
 
     using get = io::base_log::get;
