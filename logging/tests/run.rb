@@ -211,7 +211,7 @@ describe :Logging do
   end
 
   it 'should correctly handle prefixes' do
-    backend = random_backend('cluster_filter_test')
+    backend = random_backend('prefixes_test')
     logger = new_logger()
     tx, rx = logger.set_filter(backend, ["severity", 0], 60)
     bigger_backend = backend + random_backend('')
