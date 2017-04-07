@@ -197,26 +197,17 @@ auto engine_t::enqueue(event_t event, std::shared_ptr<api::stream_t> rx)
                     std::move(rx)
                 };
 
-                if (limit > 0) {
-                    queue.push_back(load);
-                    stats.queue_depth->add(queue.size());
-                } else {
-                    auto pressure = boost::accumulate(pool |
-                        boost::adaptors::map_values |
-                        boost::adaptors::transformed(+[](const slave_t& slave) {
-                            return slave.load();
-                        }),
-                        0
-                    );
-
+                if (limit == 0) {
+                    auto pressure = pool_pressure(pool);
                     auto vacant = profile.pool_limit * profile.concurrency - pressure;
-                    if (queue.size() < vacant) {
-                        queue.push_back(load);
-                        stats.queue_depth->add(queue.size());
-                    } else {
+
+                    if (queue.size() >= vacant) {
                         throw std::system_error(error::queue_is_full);
                     }
                 }
+
+                queue.push_back(load);
+                stats.queue_depth->add(queue.size());
 
                 stats.requests.accepted->fetch_add(1);
                 rebalance_events(pool, queue);
@@ -437,6 +428,16 @@ auto engine_t::select_slave(pool_type& pool, std::function<bool(const slave_t& s
     }
 }
 
+auto engine_t::pool_pressure(pool_type& pool) -> std::size_t {
+    return boost::accumulate(pool |
+        boost::adaptors::map_values |
+        boost::adaptors::transformed(+[](const slave_t& slave) {
+            return slave.load();
+        }),
+        0
+    );
+}
+
 auto engine_t::rebalance_events() -> void {
     rebalance_events(*pool.synchronize(), *queue.synchronize());
 }
@@ -491,14 +492,7 @@ auto engine_t::rebalance_slaves() -> void {
             target = load / profile.grow_threshold;
         } else {
             target = pool.apply([&](pool_type& pool) {
-                auto pressure = boost::accumulate(pool |
-                    boost::adaptors::map_values |
-                    boost::adaptors::transformed(+[](const slave_t& slave) {
-                        return slave.load();
-                    }),
-                    0
-                );
-
+                auto pressure = pool_pressure(pool);
                 auto vacant = pool.size() * profile.concurrency - pressure;
 
                 std::size_t lack = 0;
