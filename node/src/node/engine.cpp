@@ -505,7 +505,7 @@ auto engine_t::rebalance_slaves() -> void {
                 if (load < vacant) {
                     lack = 0;
                 } else {
-                    lack = std::ceil(std::max(0, int(load) - int(vacant)) / static_cast<double>(profile.concurrency));
+                    lack = std::ceil((load - vacant) / static_cast<double>(profile.concurrency));
                 }
 
                 return pool.size() +  lack;
