@@ -183,62 +183,46 @@ auto engine_t::enqueue(event_t event, std::shared_ptr<api::stream_t> rx)
     const auto limit = profile.queue_limit;
 
     try {
-        queue.apply([&](queue_type& queue) {
-            if (limit > 0) {
-                if (queue.size() >= limit) {
+        pool.apply([&](pool_type& pool) {
+            queue.apply([&](queue_type& queue) {
+                if (limit > 0 && queue.size() >= limit) {
                     throw std::system_error(error::queue_is_full);
                 }
 
                 tx->dispatch = std::make_shared<client_rpc_dispatch_t>(manifest().name);
-
-                queue.push_back({
+                auto load = load_t{
                     std::move(event),
                     trace_t::current(),
                     tx->dispatch, // Explicitly copy.
                     std::move(rx)
-                });
-                stats.queue_depth->add(queue.size());
-            } else {
-                pool.apply([&](pool_type& pool) {
-                    tx->dispatch = std::make_shared<client_rpc_dispatch_t>(manifest().name);
-                    auto load = load_t{
-                        std::move(event),
-                        trace_t::current(),
-                        tx->dispatch, // Explicitly copy.
-                        std::move(rx)
-                    };
+                };
 
-                    if (auto slave = select_slave(pool)) {
-                        try {
-                            assign(*slave, load);
-                        } catch (const std::exception& err) {
-                            COCAINE_LOG_WARNING(log, "slave has rejected assignment: {}", err.what());
-                            queue.push_back(load);
-                            stats.queue_depth->add(queue.size());
-                        }
+                if (limit > 0) {
+                    queue.push_back(load);
+                    stats.queue_depth->add(queue.size());
+                } else {
+                    auto pressure = boost::accumulate(pool |
+                        boost::adaptors::map_values |
+                        boost::adaptors::transformed(+[](const slave_t& slave) {
+                            return slave.load();
+                        }),
+                        0
+                    );
+
+                    auto vacant = profile.pool_limit * profile.concurrency - pressure;
+                    if (queue.size() < vacant) {
+                        queue.push_back(load);
+                        stats.queue_depth->add(queue.size());
                     } else {
-                        auto pressure = boost::accumulate(pool |
-                            boost::adaptors::map_values |
-                            boost::adaptors::transformed(+[](const slave_t& slave) {
-                                return slave.load();
-                            }),
-                            0
-                        );
-
-                        auto vacant = profile.pool_limit * profile.concurrency - pressure;
-                        if (queue.size() < vacant) {
-                            queue.push_back(load);
-                            stats.queue_depth->add(queue.size());
-                        } else {
-                            throw std::system_error(error::queue_is_full);
-                        }
+                        throw std::system_error(error::queue_is_full);
                     }
-                });
-            }
+                }
+
+                stats.requests.accepted->fetch_add(1);
+                rebalance_events(pool, queue);
+            });
         });
 
-        stats.requests.accepted->fetch_add(1);
-        rebalance_events();
         rebalance_slaves();
     } catch (...) {
         stats.requests.rejected->fetch_add(1);
@@ -314,7 +298,9 @@ auto engine_t::assign(slave_t& slave, load_t& load) -> void {
     auto timer = std::make_shared<metrics::timer_t::context_t>(stats.timer->context());
     slave.inject(load, [this, self, timer](std::uint64_t) {
         // TODO: Hack, but at least it saves from the deadlock.
-        loop->post(std::bind(&engine_t::rebalance_events, self));
+        loop->post([&, self] {
+            rebalance_events();
+        });
     });
 }
 
@@ -369,7 +355,10 @@ auto engine_t::on_handshake(const std::string& id, std::shared_ptr<session_t> se
 
     if (control) {
         observer.spawned();
-        loop->post(std::bind(&engine_t::rebalance_events, shared_from_this()));
+        auto self = shared_from_this();
+        loop->post([&, self] {
+            rebalance_events();
+        });
     }
 
     return control;
@@ -449,39 +438,39 @@ auto engine_t::select_slave(pool_type& pool, std::function<bool(const slave_t& s
 }
 
 auto engine_t::rebalance_events() -> void {
-    pool.apply([&](pool_type& pool) {
-        if (pool.empty()) {
-            return;
-        }
+    rebalance_events(*pool.synchronize(), *queue.synchronize());
+}
 
-        COCAINE_LOG_DEBUG(log, "rebalancing events queue");
-        queue.apply([&](queue_type& queue) {
-            while (!queue.empty()) {
-                auto& load = queue.front();
-                COCAINE_LOG_DEBUG(log, "rebalancing event");
+auto engine_t::rebalance_events(pool_type& pool, queue_type& queue) -> void {
+    if (pool.empty()) {
+        return;
+    }
 
-                if (auto slave = select_slave(pool)) {
-                    try {
-                        assign(*slave, load);
-                        // The slave may become invalid and reject the assignment or reject for any
-                        // other reasons. We pop the channel only on successful assignment to
-                        // achieve strong exception guarantee.
-                        queue.pop_front();
-                        stats.queue_depth->add(queue.size());
-                    } catch (const std::exception& err) {
-                        COCAINE_LOG_WARNING(log, "slave has rejected assignment: {}", err.what());
-                        loop->post([&] {
-                            rebalance_slaves();
-                        });
-                        break;
-                    }
-                } else {
-                    COCAINE_LOG_DEBUG(log, "no free slaves found, rebalancing is over");
-                    break;
-                }
+    COCAINE_LOG_DEBUG(log, "rebalancing events queue");
+    while (!queue.empty()) {
+        auto& load = queue.front();
+        COCAINE_LOG_DEBUG(log, "rebalancing event");
+
+        if (auto slave = select_slave(pool)) {
+            try {
+                assign(*slave, load);
+                // The slave may become invalid and reject the assignment or reject for any
+                // other reasons. We pop the channel only on successful assignment to
+                // achieve strong exception guarantee.
+                queue.pop_front();
+                stats.queue_depth->add(queue.size());
+            } catch (const std::exception& err) {
+                COCAINE_LOG_WARNING(log, "slave has rejected assignment: {}", err.what());
+                loop->post([&] {
+                    rebalance_slaves();
+                });
+                break;
             }
-        });
-    });
+        } else {
+            COCAINE_LOG_DEBUG(log, "no free slaves found, rebalancing is over");
+            break;
+        }
+    }
 }
 
 auto engine_t::rebalance_slaves() -> void {
@@ -512,7 +501,14 @@ auto engine_t::rebalance_slaves() -> void {
 
                 auto vacant = pool.size() * profile.concurrency - pressure;
 
-                return pool.size() + (load - vacant) / profile.concurrency;
+                std::size_t lack = 0;
+                if (load < vacant) {
+                    lack = 0;
+                } else {
+                    lack = std::ceil(std::max(0, int(load) - int(vacant)) / static_cast<double>(profile.concurrency));
+                }
+
+                return pool.size() +  lack;
             });
         }
     }
@@ -569,7 +565,7 @@ auto engine_t::rebalance_slaves() -> void {
                 {"target", target},
             });
 
-            if (pool.size() >= profile.pool_limit || pool.size() * profile.grow_threshold >= load) {
+            if (pool.size() >= profile.pool_limit) {
                 return;
             }
 

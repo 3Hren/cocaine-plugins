@@ -175,6 +175,7 @@ private:
     auto select_slave(pool_type& pool, std::function<bool(const slave_t& slave)> filter) -> boost::optional<slave_t&>;
 
     auto rebalance_events() -> void;
+    auto rebalance_events(pool_type& pool, queue_type& queue) -> void;
 
     auto rebalance_slaves() -> void;
 
