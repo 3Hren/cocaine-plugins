@@ -24,7 +24,7 @@ const char name_timings[] = "{}.timings";
 
 stats_t::stats_t(context_t& context, const std::string& name, std::chrono::high_resolution_clock::duration interval):
     name{name},
-    metrics_hub{context.metrics_hub()},
+    metrics_hub(context.metrics_hub()),
     requests{
         metrics_hub.counter<std::int64_t>(cocaine::format(name_requests_accepted, name)),
         metrics_hub.counter<std::int64_t>(cocaine::format(name_requests_rejected, name))
