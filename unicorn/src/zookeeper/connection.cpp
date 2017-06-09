@@ -32,6 +32,7 @@
 
 namespace zookeeper {
 namespace {
+
 template <class Ptr>
 void* c_ptr(Ptr p) {
     return reinterpret_cast<void*>(p);
@@ -111,13 +112,21 @@ connection_t::handle_ptr connection_t::zhandle(){
 }
 
 void
-connection_t::put(const path_t& path, const value_t& value, version_t version, managed_stat_handler_base_t& handler) {
+stat_cb(int rc, const struct Stat* stat, const void* data) {
+ throw 42;
+}
+
+void
+connection_t::put(const path_t& path, const value_t& value, version_t version, callback<int, const node_stat&> handler) {
     check_connectivity();
     auto prefixed_path = format_path(path);
     check_rc(
         zoo_aset(zhandle().get(), prefixed_path.c_str(), value.c_str(), value.size(), version, &handler_dispatcher_t::stat_cb, mc_ptr(&handler))
     );
 }
+
+void
+        get(const path_t& path, managed_data_handler_base_t& handler);
 
 void
 connection_t::get(const path_t& path, managed_data_handler_base_t& handler, managed_watch_handler_base_t& watch) {

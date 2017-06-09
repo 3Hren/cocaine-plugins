@@ -24,7 +24,8 @@ namespace cocaine { namespace error {
 
 enum zookeeper_errors {
     invalid_connection_endpoint = 1,
-    could_not_connect
+    could_not_connect,
+    connection_loss
 };
 
 auto

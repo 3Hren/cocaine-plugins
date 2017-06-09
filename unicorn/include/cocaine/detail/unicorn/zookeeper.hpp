@@ -23,6 +23,9 @@
 
 namespace cocaine { namespace unicorn {
 
+template<class T>
+class scoped_wrapper;
+
 //zookeeper::cfg_t make_zk_config(const dynamic_t& args);
 
 /**
@@ -38,6 +41,8 @@ serialize(const value_t& val);
 value_t
 unserialize(const zookeeper::value_t& val);
 
+
+//TODO: Remove
 struct zookeeper_scope_t: public api::unicorn_scope_t {
     std::shared_ptr<zookeeper::handler_scope_t> handler_scope;
     virtual
@@ -47,76 +52,69 @@ struct zookeeper_scope_t: public api::unicorn_scope_t {
 class zookeeper_t :
     public api::unicorn_t
 {
-public:
-
-    struct context_t {
-        std::shared_ptr<logging::logger_t> log;
-        zookeeper::connection_t& zk;
-    };
-
-    typedef api::unicorn_t::callback callback;
-
-    zookeeper_t(cocaine::context_t& context, const std::string& name, const dynamic_t& args);
-
-    ~zookeeper_t();
-
-    virtual
-    api::unicorn_scope_ptr
-    put(callback::put result,
-        const unicorn::path_t& path,
-        const unicorn::value_t& value,
-        unicorn::version_t version
-    );
-
-    virtual
-    api::unicorn_scope_ptr
-    get(callback::get result,
-        const unicorn::path_t& path
-    );
-
-    virtual
-    api::unicorn_scope_ptr
-    create(callback::create result,
-           const unicorn::path_t& path,
-           const unicorn::value_t& value,
-           bool ephemeral = false,
-           bool sequence = false);
-
-    virtual
-    api::unicorn_scope_ptr
-    del(callback::del result,
-        const unicorn::path_t& path,
-        unicorn::version_t version);
-
-    virtual
-    api::unicorn_scope_ptr
-    subscribe(callback::subscribe result,
-              const unicorn::path_t& path);
-
-    virtual
-    api::unicorn_scope_ptr
-    children_subscribe(callback::children_subscribe result,
-                       const unicorn::path_t& path);
-
-    virtual
-    api::unicorn_scope_ptr
-    increment(callback::increment result,
-              const unicorn::path_t& path,
-              const unicorn::value_t& value);
-
-    virtual
-    api::unicorn_scope_ptr
-    lock(callback::lock result,
-         const unicorn::path_t& path);
-
-private:
     cocaine::context_t& context;
-    // Executor for callback invocation
     std::unique_ptr<api::executor_t> executor;
     const std::string name;
     const std::unique_ptr<logging::logger_t> log;
     zookeeper::session_t zk_session;
     zookeeper::connection_t zk;
+
+public:
+    //TODO: remove
+    struct context_t {
+        std::shared_ptr<logging::logger_t> log;
+        zookeeper::connection_t& zk;
+    };
+
+    struct put_action_t;
+
+    using callback = api::unicorn_t::callback;
+    using scope_ptr = api::unicorn_scope_ptr;
+
+    zookeeper_t(cocaine::context_t& context, const std::string& name, const dynamic_t& args);
+
+    ~zookeeper_t();
+
+    auto put(callback::put callback, const path_t& path, const value_t& value, version_t version) -> scope_ptr override;
+
+    auto get(callback::get callback, const path_t& path) -> scope_ptr override;
+
+    auto create(callback::create callback, const path_t& path, const value_t& value, bool ephemeral, bool sequence)
+            -> scope_ptr override;
+
+    auto del(callback::del callback, const path_t& path, version_t version) -> scope_ptr override;
+
+    auto subscribe(callback::subscribe callback, const path_t& path) -> scope_ptr override;
+
+    auto children_subscribe(callback::children_subscribe callback, const path_t& path) -> scope_ptr override;
+
+    auto increment(callback::increment callback, const path_t& path, const value_t& value) -> scope_ptr override;
+
+    auto lock(callback::lock callback, const path_t& path) -> scope_ptr override;
+
+private:
+    auto put_impl(scoped_wrapper<response::put> callback, const path_t& path, const value_t& value, version_t version) -> void;
+
+    auto get_impl(scoped_wrapper<response::get> callback, const path_t& path) -> void;
+
+    auto create_impl(scoped_wrapper<response::create> callback, const path_t& path, const value_t& value,
+                     bool ephemeral, bool sequence) -> void;
+
+    auto del_impl(scoped_wrapper<response::del> callback, const path_t& path, version_t version) -> void;
+
+    auto subscribe_impl(scoped_wrapper<response::subscribe> callback, const path_t& path) -> void;
+
+    auto children_subscribe_impl(scoped_wrapper<response::children_subscribe> callback, const path_t& path) -> void;
+
+    auto increment_impl(scoped_wrapper<response::increment> callback, const path_t& path, const value_t& value) -> void;
+
+    auto lock_impl(scoped_wrapper<response::lock> callback, const path_t& path) -> void;
+
+    template<class T>
+    auto async_abort_callback(scoped_wrapper<T>& cb) -> void;
+
+    template<class Callback, class Method, class... Args>
+    auto run_command(Callback cb, Method method, Args&& ...args) -> api::unicorn_scope_ptr;
 };
 
 }}

@@ -72,12 +72,30 @@ public:
     connection_t(const connection_t&) = delete;
     connection_t& operator=(const connection_t&) = delete;
 
+//    template<class... Args>
+//    using callback = std::function<void(Args...)>;
+
+    template<class... Args>
+    struct callback {
+        virtual
+        auto operator()(Args... args) -> void = 0;
+
+        virtual
+        ~callback(){}
+    };
+
+    template<class... Args>
+    using callback_ptr = std::shared_ptr<callback<Args>>;
+
     /**
     * put value to path. If version in ZK is different returns an error.
     * See zoo_aset.
     */
     void
-    put(const path_t& path, const value_t& value, version_t version, managed_stat_handler_base_t& handler);
+    put(const path_t& path, const value_t& value, version_t version, callback_ptr<int, const node_stat&> handler);
+
+    void
+    get(const path_t& path, callback<int, value_t, const node_stat&> handler);
 
     /**
     * Get node value from ZK and set watch for that node.
@@ -94,14 +112,15 @@ public:
     * See zoo_acreate
     */
     void
-    create(const path_t& path, const value_t& value, bool ephemeral, bool sequence, managed_string_handler_base_t& handler);
+    create(const path_t& path, const value_t& value, bool ephemeral, bool sequence,
+           callback<int rc, value_t> handler);
 
     /**
     * delete node in ZK
     * See zoo_adelete
     */
     void
-    del(const path_t& path, version_t version, std::unique_ptr<void_handler_base_t> handler);
+    del(const path_t& path, version_t version, callback<int> handler);
 
     /**
     * Check if node exists
