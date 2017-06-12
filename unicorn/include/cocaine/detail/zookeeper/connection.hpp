@@ -76,69 +76,81 @@ public:
 //    using callback = std::function<void(Args...)>;
 
     template<class... Args>
-    struct callback {
+    struct replier {
         virtual
         auto operator()(Args... args) -> void = 0;
 
         virtual
-        ~callback(){}
+        ~replier(){}
     };
 
     template<class... Args>
-    using callback_ptr = std::shared_ptr<callback<Args>>;
+    using replier_ptr = std::shared_ptr<replier<Args...>>;
 
+    struct put_reply_t {
+        int rc;
+        const node_stat& stat;
+    };
+
+    struct get_reply_t {
+        int rc;
+        std::string data;
+        const node_stat& stat;
+    };
+
+    struct watch_reply_t {
+        int type;
+        int state;
+        path_t path;
+    };
+
+    struct create_reply_t {
+        int rc;
+        path_t created_path;
+    };
+
+    struct del_reply_t {
+        int rc;
+    };
+
+    struct exists_reply_t {
+        int rc;
+        const node_stat& stat;
+    };
+
+    struct children_reply_t {
+        int rc;
+        std::vector<std::string> children;
+        const node_stat& stat;
+    };
     /**
     * put value to path. If version in ZK is different returns an error.
     * See zoo_aset.
     */
     void
-    put(const path_t& path, const value_t& value, version_t version, callback_ptr<int, const node_stat&> handler);
+    put(const path_t& path, const value_t& value, version_t version, replier_ptr<put_reply_t> handler);
 
     void
-    get(const path_t& path, callback<int, value_t, const node_stat&> handler);
-
-    /**
-    * Get node value from ZK and set watch for that node.
-    * See zoo_awget
-    */
-    void
-    get(const path_t& path, managed_data_handler_base_t& handler, managed_watch_handler_base_t& watch_handler);
+    get(const path_t& path, replier_ptr<get_reply_t> handler);
 
     void
-    get(const path_t& path, managed_data_handler_base_t& handler);
-
-    /**
-    * Create node in ZK with specified path and value.
-    * See zoo_acreate
-    */
-    void
-    create(const path_t& path, const value_t& value, bool ephemeral, bool sequence,
-           callback<int rc, value_t> handler);
-
-    /**
-    * delete node in ZK
-    * See zoo_adelete
-    */
-    void
-    del(const path_t& path, version_t version, callback<int> handler);
-
-    /**
-    * Check if node exists
-    */
-    void
-    exists(const path_t& path, managed_stat_handler_base_t& handler, managed_watch_handler_base_t& watch);
-
-    /**
-    * Get node value from ZK and set watch for that node.
-    * See zoo_awget
-    */
-    void
-    childs(const path_t& path, managed_strings_stat_handler_base_t& handler, managed_watch_handler_base_t& watch_handler);
+    get(const path_t& path, replier_ptr<get_reply_t> handler, replier_ptr<watch_reply_t> watcher);
 
     void
-    childs(const path_t& path, managed_strings_stat_handler_base_t& handler);
+    create(const path_t& path, const value_t& value, bool ephemeral, bool sequence, replier_ptr<create_reply_t> handler);
 
-    void reconnect();
+    void
+    del(const path_t& path, version_t version, replier_ptr<del_reply_t> handler);
+
+    void
+    exists(const path_t& path, replier_ptr<exists_reply_t> handler, replier_ptr<watch_reply_t> watcher);
+
+    void
+    childs(const path_t& path, replier_ptr<children_reply_t>, replier_ptr<watch_reply_t> watcher);
+
+    void
+    reconnect();
+
 private:
     struct reconnect_action_t :
         public managed_watch_handler_base_t

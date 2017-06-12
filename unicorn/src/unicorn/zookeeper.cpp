@@ -14,14 +14,6 @@
 */
 
 #include "cocaine/detail/unicorn/zookeeper.hpp"
-#include "cocaine/detail/unicorn/zookeeper/children_subscribe.hpp"
-#include "cocaine/detail/unicorn/zookeeper/create.hpp"
-#include "cocaine/detail/unicorn/zookeeper/del.hpp"
-#include "cocaine/detail/unicorn/zookeeper/increment.hpp"
-#include "cocaine/detail/unicorn/zookeeper/lock.hpp"
-#include "cocaine/detail/unicorn/zookeeper/lock_state.hpp"
-#include "cocaine/detail/unicorn/zookeeper/put.hpp"
-#include "cocaine/detail/unicorn/zookeeper/subscribe.hpp"
 #include "cocaine/detail/zookeeper/errors.hpp"
 #include "cocaine/detail/zookeeper/handler.hpp"
 #include "cocaine/service/unicorn.hpp"
@@ -47,7 +39,12 @@
 namespace cocaine {
 namespace unicorn {
 
-typedef api::unicorn_t::callback callback;
+template<class T>
+using future_callback = std::function<void(std::future<T>)>;
+
+using put_result_t = std::tuple<bool, unicorn::versioned_value_t>;
+
+typedef api::unicorn_scope_ptr scope_ptr;
 
 namespace {
 
@@ -71,44 +68,30 @@ auto map_error(int rc) -> std::error_code {
 }
 
 
-
-
-
-
-
-
-
-
-
-//TODO: remove
-struct zk_scope_t : public api::unicorn_scope_t {
-    zookeeper::handler_scope_t handler_scope;
-    virtual void close()  override {};
-};
-
-template<class F, class Result>
-auto try_run(F runnable, std::function<void(std::future<Result>)>& callback, api::executor_t& executor) -> void {
-    typedef std::function<void(std::future<Result>)> callback_t;
-    try {
-        runnable();
-    } catch (...) {
-        auto future = make_exceptional_future<Result>();
-        executor.spawn(std::bind([](callback_t& cb, std::future<Result>& f) {
-            cb(std::move(f));
-        }, std::move(callback), std::move(future)));
-    }
+zookeeper::value_t serialize(const value_t& val) {
+    msgpack::sbuffer buffer;
+    msgpack::packer<msgpack::sbuffer> packer(buffer);
+    cocaine::io::type_traits<cocaine::dynamic_t>::pack(packer, val);
+    return std::string(buffer.data(), buffer.size());
 }
 
+value_t unserialize(const zookeeper::value_t& val) {
+    msgpack::object obj;
+    std::unique_ptr<msgpack::zone> z(new msgpack::zone());
 
+    msgpack_unpack_return ret = msgpack_unpack(
+            val.c_str(), val.size(), nullptr, z.get(),
+            reinterpret_cast<msgpack_object*>(&obj)
+    );
 
-
-
-
-
-
-
-
-
+    //Only strict unparse.
+    if(static_cast<msgpack::unpack_return>(ret) != msgpack::UNPACK_SUCCESS) {
+        throw std::system_error(cocaine::error::unicorn_errors::invalid_value);
+    }
+    value_t target;
+    cocaine::io::type_traits<cocaine::dynamic_t>::unpack(obj, target);
+    return target;
+}
 
 
 
@@ -155,32 +138,39 @@ public:
     }
 };
 
+using node_stat = Stat;
 
-//TODO: performance issues?
-template<class T>
-class scoped_wrapper {
-    std::shared_ptr<scope_t> scope;
-    std::function<void(std::future<T>)> f;
+template <class T>
+class safe {
+public:
+
+private:
+    std::shared_ptr<scope_t> _scope;
+    future_callback<T> wrapped;
 
 public:
-    using argument_type = T;
+    auto scope() -> std::shared_ptr<scope_t> {
+        return _scope;
+    }
 
-    scoped_wrapper(std::shared_ptr<scope_t> scope, std::function<void(std::future<T>)> f):
-        scope(std::move(scope)), f(std::move(f))
+    safe(future_callback<T> wrapped) :
+            _scope(std::make_shared<scope_t>()),
+            wrapped(std::move(wrapped))
     {}
 
     template<class Result>
     auto satisfy(Result&& result) -> void {
-        std::lock_guard<scope_t> guard(*scope);
-        if(!scope->closed()) {
-            f(make_ready_future<T>(std::forward<Result>(result)));
+        std::lock_guard<scope_t> guard(*_scope);
+        if(!_scope->closed()) {
+            wrapped(make_ready_future<T>(std::forward<Result>(result)));
         }
     }
 
     auto abort_with_current_exception() -> void {
-        std::lock_guard<scope_t> guard(*scope);
-        if(!scope->closed()) {
-            f(make_exceptional_future<T>());
+        std::lock_guard<scope_t> guard(*_scope);
+        if(!_scope->closed()) {
+            _scope->close();
+            wrapped(make_exceptional_future<T>());
         }
     }
 
@@ -192,123 +182,357 @@ public:
         }
     }
 
-    auto closed() -> bool {
-        return scope->closed();
-    }
+//    auto closed() -> bool {
+//        return scope->closed();
+//    }
 };
-
-template<class T, class F>
-class safe_wrapper {
-    scoped_wrapper<T> scoped;
-    F f;
-public:
-    safe_wrapper(scoped_wrapper<T> scoped, F f): scoped(std::move(scoped)), f(std::move(f)) {}
-
-    template<class... Args>
-    auto operator()(Args&&... args) -> void {
-        try {
-            f(std::forward<Args>(args)...);
-        } catch(...) {
-            scoped.abort_with_current_exception();
-        }
-    }
-};
-
 
 template<class T, class... Args>
-class action_t: public zookeeper::connection_t::callback<Args...> {
-    std::shared_ptr<scope_t> scope;
-    std::function<void(std::future<T>)> f;
-
+class action: virtual public safe<T>, public zookeeper::connection_t::replier<Args...> {
 public:
+//    action() : safe<T>(nullptr) {}
+    action() {}
+
     virtual
-    auto process(Args... args) = 0;
+    auto on_reply(Args... args) -> void = 0;
 
     auto operator()(Args... args) -> void override {
         try {
-            process(std::forward<Args>(args)...);
+            on_reply(std::forward<Args>(args)...);
         } catch(...) {
-            abort_with_current_exception();
+            safe<T>::abort_with_current_exception();
+        }
+    }
+};
+
+class zookeeper_t::put_t:
+        public std::enable_shared_from_this<put_t>,
+        public action<put_result_t, int, const node_stat&>,
+        public action<put_result_t, int, std::string, const node_stat&>
+{
+    zookeeper_t& parent;
+    path_t path;
+    value_t value;
+    version_t version;
+public:
+    put_t(callback::put wrapped, zookeeper_t& parent, path_t path, value_t value, version_t version):
+            safe(std::move(wrapped)),
+            parent(parent),
+            path(std::move(path)),
+            value(std::move(value)),
+            version(version)
+    {}
+
+    auto run() -> void {
+        parent.zk.put(path, serialize(value), version, shared_from_this());
+    }
+
+    auto on_reply(int rc, const node_stat& stat) -> void override {
+        if(rc == ZBADVERSION) {
+            parent.zk.get(path, shared_from_this());
+        } else if(rc != 0) {
+            throw error_t(map_error(rc), "failure during writing node value");
+        } else {
+            satisfy(std::make_tuple(true, versioned_value_t(value, stat.version)));
         }
     }
 
-private:
-    template<class Result>
-    auto satisfy(Result&& result) -> void {
-        std::lock_guard<scope_t> guard(*scope);
-        if(!scope->closed()) {
-            f(make_ready_future<T>(std::forward<Result>(result)));
+    auto on_reply(int rc, std::string data, const node_stat& stat) -> void override {
+        if (rc) {
+            throw error_t(map_error(rc), "failure during getting new node value");
+        } else {
+            satisfy(std::make_tuple(false, versioned_value_t(unserialize(data), stat.version)));
         }
-    }
-
-    auto abort_with_current_exception() -> void {
-        std::lock_guard<scope_t> guard(*scope);
-        if(!scope->closed()) {
-            f(make_exceptional_future<T>());
-        }
-    }
-
-    auto abort(std::exception_ptr eptr) -> void {
-        try {
-            std::rethrow_exception(eptr);
-        } catch(...){
-            abort_with_current_exception();
-        }
-    }
-
-    auto closed() -> bool {
-        return scope->closed();
     }
 };
 
 
-template <class T, class F>
-auto make_safe_wrapper(scoped_wrapper<T> scoped, F f) -> safe_wrapper<T, F> {
-    return safe_wrapper<T, F>(std::move(scoped), std::move(f));
+class zookeeper_t::get_t:
+        public std::enable_shared_from_this<get_t>,
+        public action<versioned_value_t, int, std::string, const node_stat&>
+{
+    zookeeper_t& parent;
+    path_t path;
+public:
+    get_t(callback::get wrapped, zookeeper_t& parent, path_t path):
+        safe(std::move(wrapped)),
+        parent(parent),
+        path(std::move(path))
+    {}
+
+    auto run() -> void {
+        parent.zk.get(path, shared_from_this());
+    }
+
+    auto on_reply(int rc, std::string data, const node_stat& stat) -> void override {
+        if (rc != 0) {
+            throw error_t(map_error(rc), "failure during getting node value");
+        } else if (stat.numChildren != 0) {
+            throw error_t(cocaine::error::child_not_allowed, "trying to read value of the node with childs");
+        } else {
+            satisfy(versioned_value_t(unserialize(data), stat.version));
+        }
+    }
 };
 
-template<class T>
-auto make_scoped_wrapper(std::shared_ptr<scope_t> scope, std::function<void(std::future<T>)> f) -> scoped_wrapper<T> {
-    return scoped_wrapper<T>(std::move(scope), std::move(f));
-}
+class zookeeper_t::create_t:
+        public std::enable_shared_from_this<create_t>,
+        public action<bool, int, zookeeper::path_t>
+{
+    zookeeper_t& parent;
+    path_t path;
+    value_t value;
+    bool ephemeral;
+    bool sequence;
+    size_t depth;
 
-template<class T>
-auto zookeeper_t::async_abort_callback(scoped_wrapper<T>& callback) -> void {
-    auto eptr = std::current_exception();
-    executor->spawn(std::bind([=](scoped_wrapper<T>& cb){
-        cb.abort(std::move(eptr));
-    }, std::move(callback)));
-}
+public:
+    create_t(callback::create wrapped, zookeeper_t& parent, path_t path, value_t value, bool ephemeral, bool sequence) :
+            safe(std::move(wrapped)),
+            parent(parent),
+            path(std::move(path)),
+            value(std::move(value)),
+            ephemeral(ephemeral),
+            sequence(sequence),
+            depth(0)
+    {}
 
-template<class Callback, class Method, class... Args>
-auto zookeeper_t::run_command(Callback cb, Method method, Args&& ...args) -> api::unicorn_scope_ptr {
-    auto scope = std::make_shared<scope_t>();
-    auto wrapper = make_scoped_wrapper(scope, std::move(cb));
+    auto run() -> void {
+        parent.zk.create(path, serialize(value), ephemeral, sequence, shared_from_this());
+    }
+
+    auto on_reply(int rc, zookeeper::path_t) -> void override {
+        if(rc == ZOK) {
+            if(depth == 0) {
+                satisfy(true);
+            } else if(depth == 1) {
+                depth--;
+                parent.zk.create(path, serialize(value), ephemeral, sequence, shared_from_this());
+            } else {
+                depth--;
+                parent.zk.create(zookeeper::path_parent(path, depth), "", false, false, shared_from_this());
+            }
+        } else if(rc == ZNONODE) {
+            depth++;
+            parent.zk.create(zookeeper::path_parent(path, depth), "", false, false, shared_from_this());
+        } else {
+            throw error_t(map_error(rc), "failure during creating node");
+        }
+    }
+};
+
+class zookeeper_t::del_t: public std::enable_shared_from_this<del_t>, public action<bool, int> {
+    zookeeper_t& parent;
+    path_t path;
+    version_t version;
+
+public:
+    del_t(callback::del wrapped, zookeeper_t& parent, path_t path, version_t version) :
+        safe(std::move(wrapped)),
+        parent(parent),
+        path(std::move(path)),
+        version(version)
+    {}
+
+    auto on_reply(int rc) -> void override {
+        if (rc != 0) {
+            throw error_t(map_error(rc), "failure during deleting node");
+        } else {
+            satisfy(true);
+        }
+    }
+
+    auto run() -> void {
+        parent.zk.del(path, version, shared_from_this());
+    }
+};
+
+class zookeeper_t::subscribe_t:
+        public std::enable_shared_from_this<subscribe_t>,
+        public action<versioned_value_t, int, std::string, const node_stat&>,
+        public action<versioned_value_t, int, const node_stat&>,
+        public action<versioned_value_t, int, int, path_t>
+{
+    zookeeper_t& parent;
+    path_t path;
+
+public:
+    auto run() -> void {
+        parent.zk.exists(path, shared_from_this(), shared_from_this());
+    }
+
+    subscribe_t(callback::subscribe wrapped, zookeeper_t& parent, path_t path):
+            safe(std::move(wrapped)),
+            path(std::move(path)),
+            parent(parent)
+    {}
+
+    auto on_reply(int rc, std::string data, const node_stat& stat) -> void override {
+        if(rc) {
+            throw error_t(map_error(rc), "node was removed");
+        } else if (stat.numChildren != 0) {
+            throw error_t(error::child_not_allowed, "trying to subscribe on node with childs");
+        } else {
+            satisfy(versioned_value_t(unserialize(data), stat.version));
+        }
+    }
+
+    auto on_reply(int rc, const zookeeper::node_stat& stat) -> void override {
+        if(rc == ZOK) {
+            parent.zk.get(path, shared_from_this(), shared_from_this());
+        } else {
+            satisfy(versioned_value_t(value_t(), unicorn::not_existing_version));
+        }
+    }
+
+    auto on_reply(int type, int state, zookeeper::path_t) -> void override {
+        if(scope()->closed()){
+            return;
+        }
+        switch(type) {
+            case ZOO_CREATED_EVENT:
+            case ZOO_CHANGED_EVENT:
+                parent.zk.get(path, shared_from_this());
+            case ZOO_DELETED_EVENT:
+                throw error_t(map_error(ZNONODE), "node was removed");
+            case ZOO_CHILD_EVENT:
+                throw error_t(error::child_not_allowed, "child created on watched node");
+            case ZOO_SESSION_EVENT:
+                COCAINE_LOG_WARNING(log, "session event {} {} on {}", type, state, path);
+                return;
+            case ZOO_NOTWATCHING_EVENT:
+            default:
+                throw error_t(error::connection_loss, "watch was cancelled");
+        }
+    }
+};
+
+class zookeeper_t::children_subscribe_t: public std::enable_shared_from_this<children_subscribe_t>,
+    public action<response::children_subscribe, int, std::vector<std::string>, const zookeeper::node_stat&>,
+    public action<response::children_subscribe, int, int, zookeeper::path_t>
+{
+    zookeeper_t& parent;
+    path_t path;
+
+public:
+    children_subscribe_t(callback::children_subscribe wrapped, zookeeper_t& parent, path_t path) :
+            safe(std::move(wrapped)),
+            parent(parent),
+            path(std::move(path))
+    {}
+
+    auto run() -> void {
+        parent.zk.childs(path, shared_from_this(), shared_from_this());
+    }
+
+    auto on_reply(int rc, std::vector<std::string> children, const zookeeper::node_stat& stat) -> void override {
+        if(rc) {
+            throw error_t(map_error(rc), "can not fetch children");
+        } else {
+            satisfy(response::children_subscribe(stat.cversion, std::move(children)));
+        }
+    }
+
+    auto on_reply(int type, int state, zookeeper::path_t) -> void override {
+        if(scope()->closed()){
+            return;
+        }
+        switch(type) {
+            case ZOO_CHILD_EVENT:
+                parent.zk.childs(path, shared_from_this(), shared_from_this());
+            case ZOO_SESSION_EVENT:
+                COCAINE_LOG_WARNING(log, "session event {} {} on {}", type, state, path);
+                return;
+            case ZOO_DELETED_EVENT:
+            case ZOO_CREATED_EVENT:
+            case ZOO_CHANGED_EVENT:
+            case ZOO_NOTWATCHING_EVENT:
+            default:
+                throw error_t(error::connection_loss, "event {} happened", type);
+        }
+    }
+};
+
+class zookeeper_t::increment_t:
+    public std::enable_shared_from_this<increment_t>,
+    public action<versioned_value_t, int, std::string, const node_stat&>,
+    public action<versioned_value_t, int, const node_stat&>,
+    public action<versioned_value_t, int, zookeeper::path_t>
+{
+    zookeeper_t& parent;
+    path_t path;
+    value_t value;
+public:
+    increment_t(callback::children_subscribe wrapped, zookeeper_t& parent, path_t path, value_t value) :
+        safe(std::move(wrapped)),
+        parent(parent),
+        path(std::move(path)),
+        value(std::move(value))
+    {}
+
+    auto run() -> void {
+        if (!value.is_double() && !value.is_int() && !value.is_uint()) {
+            throw error_t(error::unicorn_errors::invalid_type, "invalid value type for increment")
+        }
+        parent.zk.get(path, shared_from_this());
+    }
+
+    auto on_reply(int rc, std::string data, const node_stat& stat) -> void override {
+        if(rc == ZNONODE) {
+            return parent.zk.create(path, serialize(value), false, false, shared_from_this());
+        } else if(rc) {
+            throw error_t(map_error(rc), "failed to get node value");
+        }
+        value_t parsed = unserialize(data);
+        if (stat.numChildren != 0) {
+            throw error_t(error::child_not_allowed, "can not increment node with children");
+        } else if (!parsed.is_double() && !parsed.is_int() && !parsed.is_uint()) {
+            throw error_t(error::invalid_type, "can not increment non-numeric value");
+        } else if (parsed.is_double() || value.is_double()) {
+            value = parsed.to<double>() + value.to<double>();
+        } else {
+            value = parsed.to<int64_t>() + value.to<int64_t>();
+        }
+        parent.zk.put(path, serialize(value), stat.version, shared_from_this);
+    }
+
+    auto on_reply(int rc, const node_stat& stat) -> void override {
+        if(rc) {
+            throw error_t(map_error(rc), "failed to put new node value");
+        }
+        satisfy(versioned_value_t(value, stat.version));
+    }
+
+    auto on_reply(int rc, zookeeper::path_t) -> void override {
+        if(rc) {
+            throw error_t(map_error(rc), "could not create value");
+        } else {
+            satisfy(versioned_value_t(value, version_t()));
+        }
+    }
+};
+
+class zookeeper_t::lock_t :
+    public
+{
+
+};
+
+
+template<class Action, class Callback, class... Args>
+auto zookeeper_t::run_command(Callback callback, Args&& ...args) -> api::unicorn_scope_ptr {
+    auto action = std::make_shared<Action>(std::move(callback), *this, std::forward<Args>(args)...);
     try {
-        (this->*method)(wrapper, std::forward<Args>(args)...);
+        action->run();
     } catch (...) {
-        async_abort_callback(wrapper);
+        auto eptr = std::current_exception();
+        executor->spawn([=](){
+            action->abort(eptr);
+        });
     }
-    return scope;
+    return action->scope();
 }
-//template<class T>
-//auto zookeeper_t::async_abort_callback(scoped_wrapper<T>& callback, std::error_code ec, std::string reason) {
-//    executor->spawn(std::bind([](scoped_wrapper<T>& cb){
-//        auto future = make_exceptional_future<T>(std::move(ec), std::move(reason));
-//        cb(std::move(future));
-//    }, std::move(callback)));
-//}
 
-//template<class F, class T>
-//auto try_run(F runnable, scoped_wrapper<T>& callback, api::executor_t& executor) -> void {
-//    try {
-//        runnable();
-//    } catch (...) {
-//        async_abort_callback(callback);
-//    }
-//}
-
-typedef api::unicorn_scope_ptr scope_ptr;
 zookeeper_t::zookeeper_t(cocaine::context_t& _context, const std::string& _name, const dynamic_t& args) :
     api::unicorn_t(_context, name, args),
     context(_context),
@@ -327,135 +551,40 @@ zookeeper_t::~zookeeper_t() = default;
 
 //TODO: do we need impl functions? lamdas maybe will be ok
 auto zookeeper_t::put(callback::put callback, const path_t& path, const value_t& value, version_t version) -> scope_ptr {
-    return run_command(std::move(callback), &zookeeper_t::put_impl, path, value, version);
+    return run_command<put_t>(std::move(callback), path, value, version);
 }
 
 auto zookeeper_t::get(callback::get callback, const path_t& path) -> scope_ptr {
-    return run_command(std::move(callback), &zookeeper_t::get_impl, path);
+    return run_command<get_t>(std::move(callback), path);
 }
 
 auto zookeeper_t::create(callback::create callback, const path_t& path, const value_t& value,
                          bool ephemeral, bool sequence) -> scope_ptr
 {
-    return run_command(std::move(callback), &zookeeper_t::create_impl, path, value, ephemeral, sequence);
+    return run_command<create_t>(std::move(callback), path, value, ephemeral, sequence);
 }
 
 auto zookeeper_t::del(callback::del callback, const path_t& path, version_t version) -> scope_ptr {
-    return run_command(std::move(callback), &zookeeper_t::del_impl, path, version);
+    return run_command<del_t>(std::move(callback), path, version);
 }
 
 auto zookeeper_t::subscribe(callback::subscribe callback, const path_t& path) -> scope_ptr {
-    return run_command(std::move(callback), &zookeeper_t::subscribe_impl, path);
+    return run_command<subscribe_t>(std::move(callback), path);
 }
 
 auto zookeeper_t::children_subscribe(callback::children_subscribe callback, const path_t& path) -> scope_ptr {
-    return run_command(std::move(callback), &zookeeper_t::children_subscribe_impl, path);
+    return run_command<children_subscribe_t>(std::move(callback), path);
 }
 
 auto zookeeper_t::increment(callback::increment callback, const path_t& path, const value_t& value) -> scope_ptr {
-    return run_command(std::move(callback), &zookeeper_t::increment_impl, path, value);
+    return run_command<increment_t>(std::move(callback), path, value);
 }
 
 auto zookeeper_t::lock(callback::lock callback, const path_t& path) -> scope_ptr {
-    return run_command(std::move(callback), &zookeeper_t::lock_impl, path);
-}
-
-auto zookeeper_t::put_impl(scoped_wrapper<response::put> wrapper, const path_t& path, const value_t& value, version_t version)
-    -> void
-{
-
-    if (version < 0) {
-        throw error_t(error::version_not_allowed, "version should be positive");
-    }
-
-    auto on_get = make_safe_wrapper(wrapper, [=](int rc, zookeeper::value_t value, zookeeper::node_stat const& stat) mutable {
-        if (rc) {
-            throw error_t(map_error(rc), "failure during getting new node value");
-        } else {
-            wrapper.satisfy(std::make_tuple(false, versioned_value_t(unserialize(value), stat.version)));
-        }
-    });
-
-    auto on_put = make_safe_wrapper(wrapper, [=](int rc, const zookeeper::node_stat& stat) mutable {
-        if(rc == ZBADVERSION) {
-                //zk.get(path, );
-        } else if(rc != 0) {
-            throw error_t(map_error(rc), "failure during writing node value");
-        } else {
-            wrapper.satisfy(std::make_tuple(true, versioned_value_t(value, stat.version)));
-        }
-    });
-
-    zk.put(path, serialize(value), version, std::move(on_put));
-}
-
-auto zookeeper_t::get_impl(scoped_wrapper<response::get> wrapper, const path_t& path) -> void {
-    auto on_get = make_safe_wrapper(wrapper, [=](int rc, zookeeper::value_t value, const zookeeper::node_stat& stat) mutable {
-        if (rc != 0) {
-            throw error_t(map_error(rc), "failure during getting node value");
-        } else if (stat.numChildren != 0) {
-            throw error_t(cocaine::error::child_not_allowed, "trying to read value of the node with childs");
-        } else {
-            version_t new_version(stat.version);
-            wrapper.satisfy(versioned_value_t(unserialize(value), new_version));
-        }
-    });
-    zk.get(path, std::move(on_get));
-}
-
-struct on_create_t {
-    using wrapper_t = scoped_wrapper<zookeeper_t::response::create>;
-    struct data_t {
-        size_t depth;
-        wrapper_t wrapper;
-        value_t value;
-        bool ephemeral;
-        bool sequence;
-        path_t path;
-        zookeeper::connection_t& zk;
-    };
-    std::shared_ptr<data_t> d;
-
-    on_create_t(wrapper_t wrapper, value_t value, bool ephemeral, bool sequence, path_t path, zookeeper::connection_t& zk) :
-        d(std::make_shared<data_t>(data_t{0, std::move(wrapper), std::move(value), ephemeral, sequence, std::move(path), zk}))
-    {}
-
-    auto operator()(int rc, zookeeper::path_t) -> void {
-        if(rc == ZOK) {
-            if(d->depth == 0) {
-                d->wrapper.satisfy(true);
-            } else if(d->depth == 1) {
-                d->depth--;
-                d->zk.create(d->path, serialize(d->value), d->ephemeral, d->sequence, *this);
-            } else {
-                d->depth--;
-                d->zk.create(zookeeper::path_parent(d->path, d->depth), "", false, false, *this);
-            }
-        } else if(rc == ZNONODE) {
-            d->depth++;
-            d->zk.create(zookeeper::path_parent(d->path, d->depth), "", false, false, *this);
-        } else {
-            throw error_t(map_error(rc), "failure during creating node");
-        }
-    }
-};
-
-auto zookeeper_t::create_impl(scoped_wrapper<response::create> wrapper, const path_t& path, const value_t& value,
-                              bool ephemeral, bool sequence) -> void
-{
-    auto on_create = make_safe_wrapper(wrapper, on_create_t(wrapper, value, ephemeral, sequence, path, zk));
-    zk.create(path, serialize(value), ephemeral, sequence, std::move(on_create));
+    return run_command<lock_t>(std::move(callback), path);
 }
 
 auto zookeeper_t::del_impl(scoped_wrapper<response::del> wrapper, const path_t& path, version_t version) -> void {
-    auto on_del = make_safe_wrapper(wrapper, [=](int rc) mutable {
-        if (rc != 0) {
-            throw error_t(map_error(rc), "failure during deleting node");
-        } else {
-            wrapper.satisfy(true);
-        }
-    });
-    zk.del(path, version, std::move(on_del));
 }
 
 auto zookeeper_t::subscribe_impl(scoped_wrapper<response::subscribe> wrapper, const path_t& path) -> void {
@@ -587,31 +716,6 @@ auto zookeeper_t::lock_impl(scoped_wrapper<response::lock> wrapper, const path_t
     }, handler.callback, *executor);
     COCAINE_LOG_DEBUG(logger, "enqueued");
     return lock_state;
-}
-
-zookeeper::value_t serialize(const value_t& val) {
-    msgpack::sbuffer buffer;
-    msgpack::packer<msgpack::sbuffer> packer(buffer);
-    cocaine::io::type_traits<cocaine::dynamic_t>::pack(packer, val);
-    return std::string(buffer.data(), buffer.size());
-}
-
-value_t unserialize(const zookeeper::value_t& val) {
-    msgpack::object obj;
-    std::unique_ptr<msgpack::zone> z(new msgpack::zone());
-
-    msgpack_unpack_return ret = msgpack_unpack(
-    val.c_str(), val.size(), nullptr, z.get(),
-    reinterpret_cast<msgpack_object*>(&obj)
-    );
-
-    //Only strict unparse.
-    if(static_cast<msgpack::unpack_return>(ret) != msgpack::UNPACK_SUCCESS) {
-        throw std::system_error(cocaine::error::unicorn_errors::invalid_value);
-    }
-    value_t target;
-    cocaine::io::type_traits<cocaine::dynamic_t>::unpack(obj, target);
-    return target;
 }
 
 }}

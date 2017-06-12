@@ -60,13 +60,14 @@ class zookeeper_t :
     zookeeper::connection_t zk;
 
 public:
-    //TODO: remove
-    struct context_t {
-        std::shared_ptr<logging::logger_t> log;
-        zookeeper::connection_t& zk;
-    };
-
-    struct put_action_t;
+    class put_t;
+    class get_t;
+    class create_t;
+    class del_t;
+    class subscribe_t;
+    class children_subscribe_t;
+    class increment_t;
+    class lock_t;
 
     using callback = api::unicorn_t::callback;
     using scope_ptr = api::unicorn_scope_ptr;
@@ -93,28 +94,8 @@ public:
     auto lock(callback::lock callback, const path_t& path) -> scope_ptr override;
 
 private:
-    auto put_impl(scoped_wrapper<response::put> callback, const path_t& path, const value_t& value, version_t version) -> void;
-
-    auto get_impl(scoped_wrapper<response::get> callback, const path_t& path) -> void;
-
-    auto create_impl(scoped_wrapper<response::create> callback, const path_t& path, const value_t& value,
-                     bool ephemeral, bool sequence) -> void;
-
-    auto del_impl(scoped_wrapper<response::del> callback, const path_t& path, version_t version) -> void;
-
-    auto subscribe_impl(scoped_wrapper<response::subscribe> callback, const path_t& path) -> void;
-
-    auto children_subscribe_impl(scoped_wrapper<response::children_subscribe> callback, const path_t& path) -> void;
-
-    auto increment_impl(scoped_wrapper<response::increment> callback, const path_t& path, const value_t& value) -> void;
-
-    auto lock_impl(scoped_wrapper<response::lock> callback, const path_t& path) -> void;
-
-    template<class T>
-    auto async_abort_callback(scoped_wrapper<T>& cb) -> void;
-
-    template<class Callback, class Method, class... Args>
-    auto run_command(Callback cb, Method method, Args&& ...args) -> api::unicorn_scope_ptr;
+    template<class Action, class Callback, class... Args>
+    auto run_command(Callback callback, Args&& ...args) -> scope_ptr;
 };
 
 }}
