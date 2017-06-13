@@ -59,6 +59,54 @@ public:
 private:
     std::vector<endpoint_t> endpoints;
 };
+template<class... Args>
+struct replier {
+    virtual
+    auto operator()(Args... args) -> void = 0;
+
+    virtual
+    ~replier(){}
+};
+
+template<class... Args>
+using replier_ptr = std::shared_ptr<replier<Args...>>;
+
+struct put_reply_t {
+    int rc;
+    const node_stat& stat;
+};
+
+struct get_reply_t {
+    int rc;
+    std::string data;
+    const node_stat& stat;
+};
+
+struct watch_reply_t {
+    int type;
+    int state;
+    path_t path;
+};
+
+struct create_reply_t {
+    int rc;
+    path_t created_path;
+};
+
+struct del_reply_t {
+    int rc;
+};
+
+struct exists_reply_t {
+    int rc;
+    const node_stat& stat;
+};
+
+struct children_reply_t {
+    int rc;
+    std::vector<std::string> children;
+    const node_stat& stat;
+};
 
 /**
 * Adapter class to zookeeper C api.
@@ -72,57 +120,6 @@ public:
     connection_t(const connection_t&) = delete;
     connection_t& operator=(const connection_t&) = delete;
 
-//    template<class... Args>
-//    using callback = std::function<void(Args...)>;
-
-    template<class... Args>
-    struct replier {
-        virtual
-        auto operator()(Args... args) -> void = 0;
-
-        virtual
-        ~replier(){}
-    };
-
-    template<class... Args>
-    using replier_ptr = std::shared_ptr<replier<Args...>>;
-
-    struct put_reply_t {
-        int rc;
-        const node_stat& stat;
-    };
-
-    struct get_reply_t {
-        int rc;
-        std::string data;
-        const node_stat& stat;
-    };
-
-    struct watch_reply_t {
-        int type;
-        int state;
-        path_t path;
-    };
-
-    struct create_reply_t {
-        int rc;
-        path_t created_path;
-    };
-
-    struct del_reply_t {
-        int rc;
-    };
-
-    struct exists_reply_t {
-        int rc;
-        const node_stat& stat;
-    };
-
-    struct children_reply_t {
-        int rc;
-        std::vector<std::string> children;
-        const node_stat& stat;
-    };
     /**
     * put value to path. If version in ZK is different returns an error.
     * See zoo_aset.
@@ -143,7 +140,14 @@ public:
     del(const path_t& path, version_t version, replier_ptr<del_reply_t> handler);
 
     void
+    del(const path_t& path, replier_ptr<del_reply_t> handler);
+
+
+    void
     exists(const path_t& path, replier_ptr<exists_reply_t> handler, replier_ptr<watch_reply_t> watcher);
+
+    void
+    childs(const path_t& path, replier_ptr<children_reply_t>);
 
     void
     childs(const path_t& path, replier_ptr<children_reply_t>, replier_ptr<watch_reply_t> watcher);
