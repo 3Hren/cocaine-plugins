@@ -62,9 +62,6 @@ zookeeper::cfg_t make_zk_config(const dynamic_t& args) {
     return zookeeper::cfg_t(endpoints, cfg.at("recv_timeout_ms", 1000u).as_uint(), cfg.at("prefix", "").as_string());
 }
 
-auto map_error(int rc) -> std::error_code {
-    return cocaine::error::make_error_code(cocaine::error::zookeeper_errors(rc));
-}
 }
 
 
@@ -231,7 +228,7 @@ public:
         if(reply.rc == ZBADVERSION) {
             parent.zk.get(path, shared_from_this());
         } else if(reply.rc != 0) {
-            throw error_t(map_error(reply.rc), "failure during writing node value");
+            throw error_t(map_zoo_error(reply.rc), "failure during writing node value - {}", zerror(reply.rc));
         } else {
             satisfy(std::make_tuple(true, versioned_value_t(value, reply.stat.version)));
         }
@@ -239,7 +236,7 @@ public:
 
     auto on_reply(zookeeper::get_reply_t reply) -> void override {
         if (reply.rc) {
-            throw error_t(map_error(reply.rc), "failure during getting new node value");
+            throw error_t(map_zoo_error(reply.rc), "failure during getting new node value - {}", zerror(reply.rc));
         } else {
             satisfy(std::make_tuple(false, versioned_value_t(unserialize(reply.data), reply.stat.version)));
         }
@@ -266,7 +263,7 @@ public:
 
     auto on_reply(zookeeper::get_reply_t reply) -> void override {
         if (reply.rc != 0) {
-            throw error_t(map_error(reply.rc), "failure during getting node value");
+            throw error_t(map_zoo_error(reply.rc), "failure during getting node value - {}", zerror(reply.rc));
         } else if (reply.stat.numChildren != 0) {
             throw error_t(cocaine::error::child_not_allowed, "trying to read value of the node with childs");
         } else {
@@ -316,7 +313,7 @@ public:
             depth++;
             parent.zk.create(zookeeper::path_parent(path, depth), "", false, false, shared_from_this());
         } else {
-            throw error_t(map_error(reply.rc), "failure during creating node");
+            throw error_t(map_zoo_error(reply.rc), "failure during creating node - {}", zerror(reply.rc));
         }
     }
 };
@@ -339,7 +336,7 @@ public:
 
     auto on_reply(zookeeper::del_reply_t reply) -> void override {
         if (reply.rc != 0) {
-            throw error_t(map_error(reply.rc), "failure during deleting node");
+            throw error_t(map_zoo_error(reply.rc), "failure during deleting node - {}", zerror(reply.rc));
         } else {
             satisfy(true);
         }
@@ -370,7 +367,7 @@ public:
 
     auto on_reply(zookeeper::get_reply_t reply) -> void override {
         if(reply.rc) {
-            throw error_t(map_error(reply.rc), "node was removed");
+            throw error_t(map_zoo_error(reply.rc), "node was removed - {}", zerror(reply.rc));
         } else if (reply.stat.numChildren != 0) {
             throw error_t(error::child_not_allowed, "trying to subscribe on node with childs");
         } else {
@@ -392,20 +389,20 @@ public:
             return;
         }
         auto type = reply.type;
-        if(type == ZOO_CREATED_EVENT || type == ZOO_CHANGED_EVENT) {
+        auto state = reply.state
+        if(type == ZOO_CREATED_EVENT || type == ZOO_CHANGED_EVENT ||
+                (type == ZOO_SESSION_EVENT && state == ZOO_CONNECTED_STATE)
+        ) {
             return parent.zk.get(path, shared_from_this());
-        }
-        if(type == ZOO_DELETED_EVENT) {
-            throw error_t(map_error(ZNONODE), "node was removed");
-        }
-        if(type == ZOO_CHILD_EVENT) {
+        } else if(type == ZOO_DELETED_EVENT) {
+            throw error_t(map_zoo_error(ZNONODE), "node was removed");
+        } else if(type == ZOO_CHILD_EVENT) {
             throw error_t(error::child_not_allowed, "child created on watched node");
+        } else if(type == ZOO_SESSION_EVENT){
+            throw error_t(error::connection_loss, "session event {}, possibly lost connection");
         }
-        if(type == ZOO_SESSION_EVENT) {
-            COCAINE_LOG_WARNING(parent.log, "session event {} {} on {}", reply.type, reply.state, reply.path);
-            return;
-        }
-        throw error_t(error::connection_loss, "watch was cancelled with {}, {} event on {}", reply.type, reply.state, reply.path);
+        throw error_t(error::connection_loss, "watch occured with {} type, {} state event on \"{}\" path",
+                      type, state, reply.path);
     }
 };
 
@@ -429,7 +426,7 @@ public:
 
     auto on_reply(zookeeper::children_reply_t reply) -> void override {
         if(reply.rc) {
-            throw error_t(map_error(reply.rc), "can not fetch children");
+            throw error_t(map_zoo_error(reply.rc), "can not fetch children - {}", zerror(reply.rc));
         } else {
             satisfy(response::children_subscribe(reply.stat.cversion, std::move(reply.children)));
         }
@@ -440,14 +437,14 @@ public:
         if(scope()->closed.unsafe()){
             return;
         }
-        if(reply.type == ZOO_CHILD_EVENT) {
+        if(reply.type == ZOO_CHILD_EVENT || (reply.type == ZOO_SESSION_EVENT && reply.state == ZOO_CONNECTED_STATE)) {
             return parent.zk.childs(path, shared_from_this(), shared_from_this());
+        } else if(reply.type == ZOO_SESSION_EVENT) {
+            throw error_t(error::connection_loss, "session event {} {}, possible disconnection", reply.type, reply.state);
+        } else {
+            throw error_t(error::connection_loss, "watch occured with {} type, {} state event on \"{}\" path",
+                          type, state, reply.path);
         }
-        if(reply.type == ZOO_SESSION_EVENT) {
-            COCAINE_LOG_WARNING(parent.log, "session event {} {} on {}", reply.type, reply.state, reply.path);
-            return;
-        }
-        throw error_t(error::connection_loss, "event {}, {} on {} happened", reply.type, reply.state, reply.path);
     }
 };
 
@@ -477,7 +474,7 @@ public:
         if(reply.rc == ZNONODE) {
             return parent.zk.create(path, serialize(value), false, false, shared_from_this());
         } else if(reply.rc) {
-            throw error_t(map_error(reply.rc), "failed to get node value");
+            throw error_t(map_zoo_error(reply.rc), "failed to get node value - {}", zerror(reply.rc));
         }
         value_t parsed = unserialize(reply.data);
         if (reply.stat.numChildren != 0) {
@@ -494,14 +491,14 @@ public:
 
     auto on_reply(zookeeper::put_reply_t reply) -> void override {
         if(reply.rc) {
-            throw error_t(map_error(reply.rc), "failed to put new node value");
+            throw error_t(map_zoo_error(reply.rc), "failed to put new node value - {}", zerror(reply.rc));
         }
         satisfy(versioned_value_t(value, reply.stat.version));
     }
 
     auto on_reply(zookeeper::create_reply_t reply) -> void override {
         if(reply.rc) {
-            throw error_t(map_error(reply.rc), "could not create value");
+            throw error_t(map_zoo_error(reply.rc), "could not create value - {}", zerror(reply.rc));
         } else {
             satisfy(versioned_value_t(value, version_t()));
         }
@@ -539,7 +536,6 @@ public:
     };
 
 private:
-    std::shared_ptr<lock_scope_t> _scope;
     callback::lock wrapped;
     zookeeper_t& parent;
     path_t folder;
@@ -559,10 +555,6 @@ public:
         depth(0)
     {}
 
-    auto scope() -> std::shared_ptr<lock_scope_t> {
-        return _scope;
-    }
-
     auto run() -> void {
         parent.zk.create(path, serialize(value), true, true, shared_from_this());
     }
@@ -570,7 +562,7 @@ public:
     auto on_reply(zookeeper::create_reply_t reply) -> void override {
         if(reply.rc == ZOK) {
             if(depth == 0) {
-                return _scope->closed.apply([&](bool& closed){
+                return scope()->closed.apply([&](bool& closed){
                     created_sequence_path = reply.created_path;
                     if(!closed) {
                         parent.zk.childs(folder, shared_from_this());
@@ -589,13 +581,13 @@ public:
             depth++;
             parent.zk.create(zookeeper::path_parent(path, depth), "", false, false, shared_from_this());
         } else {
-            throw error_t(map_error(reply.rc), "failure during creating node");
+            throw error_t(map_zoo_error(reply.rc), "failure during creating node - {}", zerror(reply.rc));
         }
     }
 
     auto on_reply(zookeeper::children_reply_t reply) -> void override {
         if(reply.rc) {
-            throw error_t(map_error(reply.rc), "failed to get lock folder children");
+            throw error_t(map_zoo_error(reply.rc), "failed to get lock folder children - {}", zerror(reply.rc));
         }
         auto& children = reply.children;
         std::sort(children.begin(), children.end());
@@ -619,18 +611,18 @@ public:
         if(reply.rc == ZNONODE) {
             satisfy(true);
         } else if(reply.rc) {
-            throw error_t(map_error(reply.rc), "error during fetching previous lock");
+            throw error_t(map_zoo_error(reply.rc), "error during fetching previous lock - {}", zerror(reply.rc));
         }
     }
 
     auto on_reply(zookeeper::watch_reply_t reply) -> void override {
         if(reply.type == ZOO_DELETED_EVENT) {
             satisfy(true);
-        } else if(reply.type == ZOO_SESSION_EVENT){
-            COCAINE_LOG_WARNING(parent.log, "session event {} {} on {}", reply.type, reply.state, reply.path);
-            return;
+        } else if(reply.type == ZOO_SESSION_EVENT) {
+            throw error_t(error::connection_loss, "session event {} {}, possible disconnection", reply.type, reply.state);
         } else {
-            throw error_t("invalid lock watch event {} {} on {}", reply.type, reply.state, reply.path);
+            throw error_t(error::connection_loss, "watch occured with {} type, {} state event on \"{}\" path",
+                          reply.type, reply.state, reply.path);
         }
     }
 

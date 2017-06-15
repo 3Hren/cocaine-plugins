@@ -25,10 +25,12 @@
 
 #include <zookeeper/zookeeper.h>
 
+#include <map>
 #include <vector>
 #include <string>
 #include <thread>
 
+namespace cocaine {
 namespace zookeeper {
 
 class cfg_t {
@@ -114,8 +116,9 @@ struct children_reply_t {
 */
 class connection_t {
 public:
-    typedef std::shared_ptr<zhandle_t> handle_ptr;
+    typedef std::shared_ptr<zhandle_t> zhandle_ptr;
     using stat_t = struct Stat;
+    using watchers_t = std::map<size_t, replier_ptr<watch_reply_t>>;
 
     connection_t(const cfg_t& cfg, const session_t& session);
     connection_t(const connection_t&) = delete;
@@ -144,6 +147,8 @@ public:
     auto reconnect() -> void;
 
 private:
+    friend auto watch_cb(zhandle_t* zh, int type, int state, const char* path, void* watch_data) -> void;
+
     template<class ZooFunction, class Replier, class CCallback, class... Args>
     auto zoo_command(ZooFunction f, const path_t& path, Replier replier, CCallback cb, Args... args) -> void;
 
@@ -151,24 +156,19 @@ private:
     auto zoo_watched_command(ZooFunction f, const path_t& path, Replier replier, CCallback cb,
                              Watcher watcher, Args... args) -> void;
 
-    struct reconnect_action_t :
-        public managed_watch_handler_base_t
-    {
-        reconnect_action_t(const handler_tag& tag, connection_t& _parent) :
-            managed_handler_base_t(tag),
-            managed_watch_handler_base_t(tag),
-            parent(_parent)
-        {}
+    auto create_prefix() -> void;
 
-        virtual void
-        watch_event(int type, int state, path_t path);
+    auto format_path(const path_t& path) -> path_t;
 
-        connection_t& parent;
-    };
+    auto reconnect(zhandle_ptr& old_handle) -> void;
 
-    void reconnect(handle_ptr& old_handle);
-    path_t format_path(const path_t& path);
-    handle_ptr zhandle();
+    auto init() -> zhandle_ptr;
+
+    auto close(zhandle_t* handle) -> void;
+
+    auto check_connectivity() -> void;
+
+    static auto check_rc(int rc) -> void;
 
     cfg_t cfg;
     session_t session;
@@ -176,14 +176,12 @@ private:
     // executor for closing connections to avoid deadlocks
     std::unique_ptr<cocaine::api::executor_t> executor;
 
-    cocaine::synchronized<handle_ptr> _zhandle;
-    void check_rc(int rc) const;
-    void check_connectivity();
-    handle_ptr init();
-    void close(zhandle_t* handle);
-    void create_prefix();
-    handler_scope_t w_scope;
-    managed_watch_handler_base_t& watcher;
+    cocaine::synchronized<zhandle_ptr> zhandle;
+
+    size_t id_counter;
+    cocaine::synchronized<watchers_t> watchers;
 };
-}
+
+} // namespace zookeeper
+} // namespace cocaine
 

@@ -27,33 +27,17 @@
 
 namespace cocaine { namespace error {
 
-class zookeeper_category_t:
-    public std::error_category
-{
-    virtual
-    auto
-    name() const throw() -> const char* {
-        return "cocaine.plugins.zookeeper";
+auto map_zoo_error(int rc) -> std::error_code {
+    if(rc == ZCONNECTIONLOSS || rc == ZSESSIONEXPIRED || rc == ZCLOSING) {
+        return make_error_code(error::unicorn_errors::connection_loss);
     }
-
-    virtual
-    auto
-    message(int code) const -> std::string {
-        return std::string("zookeeper: ") + zerror(code);
+    if(rc == ZNONODE) {
+        return make_error_code(error::unicorn_errors::no_node);
     }
-
-
-};
-
-auto
-zookeeper_category() -> const std::error_category& {
-    static zookeeper_category_t instance;
-    return instance;
-}
-
-auto
-make_error_code(zookeeper_errors code) -> std::error_code {
-    return std::error_code(static_cast<int>(code), zookeeper_category());
+    if(rc == ZNODEEXISTS) {
+        return make_error_code(error::unicorn_errors::node_exists);
+    }
+    return make_error_code(error::unicorn_errors::backend_internal_error);
 }
 
 }}

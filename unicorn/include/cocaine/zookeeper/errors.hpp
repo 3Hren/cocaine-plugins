@@ -22,27 +22,7 @@
 
 namespace cocaine { namespace error {
 
-enum zookeeper_errors {
-    invalid_connection_endpoint = 1,
-    could_not_connect,
-    connection_loss
-};
+auto map_zoo_error(int rc) -> std::error_code;
 
-auto
-zookeeper_category() -> const std::error_category&;
-
-constexpr size_t zookeeper_category_id = 0x40FF;
-
-auto
-make_error_code(zookeeper_errors code) -> std::error_code;
-
-}}
-
-namespace std {
-
-template<>
-struct is_error_code_enum<cocaine::error::zookeeper_errors>:
-public true_type
-{ };
-
-}
+} // namespace error
+} // namespace cocaine
