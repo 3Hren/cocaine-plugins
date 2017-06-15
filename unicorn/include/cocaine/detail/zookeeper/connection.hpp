@@ -37,8 +37,7 @@ public:
     public:
         endpoint_t(std::string _hostname, unsigned int _port);
 
-        std::string
-        to_string() const;
+        auto to_string() const -> std::string;
 
     private:
         std::string hostname;
@@ -51,14 +50,15 @@ public:
     * ZK connection string.
     * ZK accepts several host:port values of a cluster splitted by comma.
     */
-    std::string
-    connection_string() const;
+    auto connection_string() const -> std::string;
 
     const unsigned int recv_timeout_ms;
     std::string prefix;
+
 private:
     std::vector<endpoint_t> endpoints;
 };
+
 template<class... Args>
 struct replier {
     virtual
@@ -115,6 +115,7 @@ struct children_reply_t {
 class connection_t {
 public:
     typedef std::shared_ptr<zhandle_t> handle_ptr;
+    using stat_t = struct Stat;
 
     connection_t(const cfg_t& cfg, const session_t& session);
     connection_t(const connection_t&) = delete;
@@ -124,38 +125,32 @@ public:
     * put value to path. If version in ZK is different returns an error.
     * See zoo_aset.
     */
-    void
-    put(const path_t& path, const value_t& value, version_t version, replier_ptr<put_reply_t> handler);
+    auto put(const path_t& path, const value_t& value, version_t version, replier_ptr<put_reply_t> handler) -> void;
 
-    void
-    get(const path_t& path, replier_ptr<get_reply_t> handler);
+    auto get(const path_t& path, replier_ptr<get_reply_t> handler) -> void;
+    auto get(const path_t& path, replier_ptr<get_reply_t> handler, replier_ptr<watch_reply_t> watcher) -> void;
 
-    void
-    get(const path_t& path, replier_ptr<get_reply_t> handler, replier_ptr<watch_reply_t> watcher);
+    auto create(const path_t& path, const value_t& value, bool ephemeral, bool sequence, replier_ptr<create_reply_t> handler) -> void;
 
-    void
-    create(const path_t& path, const value_t& value, bool ephemeral, bool sequence, replier_ptr<create_reply_t> handler);
+    auto del(const path_t& path, version_t version, replier_ptr<del_reply_t> handler) -> void;
+    auto del(const path_t& path, replier_ptr<del_reply_t> handler) -> void;
 
-    void
-    del(const path_t& path, version_t version, replier_ptr<del_reply_t> handler);
+    auto exists(const path_t& path, replier_ptr<exists_reply_t> handler) -> void;
+    auto exists(const path_t& path, replier_ptr<exists_reply_t> handler, replier_ptr<watch_reply_t> watcher) -> void;
 
-    void
-    del(const path_t& path, replier_ptr<del_reply_t> handler);
+    auto childs(const path_t& path, replier_ptr<children_reply_t> handler) -> void;
+    auto childs(const path_t& path, replier_ptr<children_reply_t> handler, replier_ptr<watch_reply_t> watcher) -> void;
 
-
-    void
-    exists(const path_t& path, replier_ptr<exists_reply_t> handler, replier_ptr<watch_reply_t> watcher);
-
-    void
-    childs(const path_t& path, replier_ptr<children_reply_t>);
-
-    void
-    childs(const path_t& path, replier_ptr<children_reply_t>, replier_ptr<watch_reply_t> watcher);
-
-    void
-    reconnect();
+    auto reconnect() -> void;
 
 private:
+    template<class ZooFunction, class Replier, class CCallback, class... Args>
+    auto zoo_command(ZooFunction f, const path_t& path, Replier replier, CCallback cb, Args... args) -> void;
+
+    template<class ZooFunction, class Replier, class CCallback, class Watcher, class... Args>
+    auto zoo_watched_command(ZooFunction f, const path_t& path, Replier replier, CCallback cb,
+                             Watcher watcher, Args... args) -> void;
+
     struct reconnect_action_t :
         public managed_watch_handler_base_t
     {
@@ -172,7 +167,7 @@ private:
     };
 
     void reconnect(handle_ptr& old_handle);
-    path_t format_path(const path_t path);
+    path_t format_path(const path_t& path);
     handle_ptr zhandle();
 
     cfg_t cfg;

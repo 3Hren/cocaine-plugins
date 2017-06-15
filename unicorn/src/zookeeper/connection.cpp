@@ -43,6 +43,17 @@ void* mc_ptr(Ptr p) {
     return reinterpret_cast<void*>(p->get_id());
 }
 
+template <class T>
+auto pack_ptr(std::shared_ptr<T> shared) -> std::unique_ptr<std::shared_ptr<T>> {
+    return std::unique_ptr<std::shared_ptr<T>>(new std::shared_ptr<T>(std::move(shared)));
+}
+
+template <class T>
+auto unpack_ptr(const void* raw_ptr) -> replier_ptr<T> {
+    std::unique_ptr<const replier_ptr<T>> managed_ptr(reinterpret_cast<const replier_ptr<T>*>(raw_ptr));
+    return replier_ptr<T>(std::move(*managed_ptr));
+}
+
 }
 
 cfg_t::endpoint_t::endpoint_t(std::string _hostname, unsigned int _port) :
@@ -98,7 +109,7 @@ zookeeper::connection_t::connection_t(const cfg_t& _cfg, const session_t& _sessi
     });
 }
 
-path_t zookeeper::connection_t::format_path(const path_t path) {
+path_t zookeeper::connection_t::format_path(const path_t& path) {
     if(path.empty() || path[0] != '/') {
         throw std::system_error(ZBADARGUMENTS,  cocaine::error::zookeeper_category());
     }
@@ -111,92 +122,123 @@ connection_t::handle_ptr connection_t::zhandle(){
     });
 }
 
-void
-stat_cb(int rc, const struct Stat* stat, const void* data) {
- throw 42;
+auto put_cb(int rc, const connection_t::stat_t* stat, const void* data) -> void {
+    auto replier = unpack_ptr<put_reply_t>(data);
+    connection_t::stat_t empty_stat = {};
+    replier->operator()({rc, rc ? empty_stat : *stat});
 }
 
-void
-connection_t::put(const path_t& path, const value_t& value, version_t version, callback<int, const node_stat&> handler) {
+auto get_cb(int rc, const char* value, int value_len, const connection_t::stat_t* stat, const void* data) -> void {
+    auto replier = unpack_ptr<get_reply_t>(data);
+    connection_t::stat_t empty_stat = {};
+    replier->operator()({rc, rc ? std::string() : std::string(value, value_len), rc ? empty_stat : *stat});
+}
+
+auto create_cb(int rc, const char* path, const void* data) -> void {
+    auto replier = unpack_ptr<create_reply_t>(data);
+    replier->operator()({rc, rc ? std::string() : path});
+}
+
+auto delete_cb(int rc, const void* data) -> void {
+    auto replier = unpack_ptr<del_reply_t>(data);
+    replier->operator()({rc});
+}
+
+auto exists_cb(int rc, const connection_t::stat_t* stat, const void* data) -> void {
+    auto replier = unpack_ptr<exists_reply_t>(data);
+    connection_t::stat_t empty_stat = {};
+    replier->operator()({rc, rc ? empty_stat : *stat});
+}
+
+auto children_cb(int rc, const struct String_vector* strings, const connection_t::stat_t* stat, const void* data) -> void {
+    auto replier = unpack_ptr<children_reply_t>(data);
+    std::vector<std::string> children;
+    connection_t::stat_t empty_stat = {};
+    if(!rc) {
+        for(int i = 0; i < strings->count; i++) {
+            children.emplace_back(strings->data[i]);
+        }
+    }
+    replier->operator()({rc, std::move(children), rc ? empty_stat : *stat});
+}
+
+//TODO: rework this
+auto watch_cb(zhandle_t* /*zh*/, int type, int state, const char* path, void* watch_data) -> void {
+    auto replier = unpack_ptr<watch_reply_t>(watch_data);
+    replier->operator()({type, state, path});
+}
+
+template<class ZooFunction, class Replier, class CCallback, class... Args>
+auto connection_t::zoo_command(ZooFunction f, const path_t& path, Replier replier, CCallback cb, Args... args) -> void {
     check_connectivity();
     auto prefixed_path = format_path(path);
+    auto ctx = pack_ptr(std::forward<Replier>(replier));
     check_rc(
-        zoo_aset(zhandle().get(), prefixed_path.c_str(), value.c_str(), value.size(), version, &handler_dispatcher_t::stat_cb, mc_ptr(&handler))
+            f(zhandle().get(), prefixed_path.c_str(), std::forward<Args>(args)..., cb, ctx.get())
     );
+    ctx.release();
+};
+
+template<class ZooFunction, class Replier, class CCallback, class Watcher, class... Args>
+auto connection_t::zoo_watched_command(ZooFunction f, const path_t& path, Replier replier, CCallback cb,
+                                       Watcher watcher, Args... args) -> void
+{
+    if(watcher) {
+        auto ctx = pack_ptr(std::move(watcher));
+        zoo_command(f, path, std::forward<Replier>(replier), cb, std::forward<Args>(args)..., watch_cb, ctx.get());
+        ctx.release();
+    } else {
+        zoo_command(f, path, std::forward<Replier>(replier), cb, std::forward<Args>(args)..., nullptr, nullptr);
+    }
+};
+
+
+auto connection_t::put(const path_t& path, const value_t& value, version_t version, replier_ptr<put_reply_t> handler) -> void {
+    zoo_command(zoo_aset, path, std::move(handler), put_cb, value.c_str(), value.size(), version);
 }
 
-void
-        get(const path_t& path, managed_data_handler_base_t& handler);
-
-void
-connection_t::get(const path_t& path, managed_data_handler_base_t& handler, managed_watch_handler_base_t& watch) {
-    check_connectivity();
-    auto prefixed_path = format_path(path);
-    check_rc(
-        zoo_awget(zhandle().get(), prefixed_path.c_str(), &handler_dispatcher_t::watcher_cb, mc_ptr(&watch), &handler_dispatcher_t::data_cb, mc_ptr(&handler))
-    );
+auto connection_t::get(const path_t& path, replier_ptr<get_reply_t> handler) -> void {
+    get(path, std::move(handler), nullptr);
 }
 
-void
-connection_t::get(const path_t& path, managed_data_handler_base_t& handler) {
-    check_connectivity();
-    auto prefixed_path = format_path(path);
-    check_rc(
-        zoo_awget(zhandle().get(), prefixed_path.c_str(), &handler_dispatcher_t::watcher_cb, nullptr, &handler_dispatcher_t::data_cb, mc_ptr(&handler))
-    );
+auto connection_t::get(const path_t& path, replier_ptr<get_reply_t> handler, replier_ptr<watch_reply_t> watcher) -> void {
+    zoo_watched_command(zoo_awget, path, std::move(handler), get_cb, std::move(watcher));
 }
 
-void
-connection_t::create(const path_t& path, const value_t& value, bool ephemeral, bool sequence, managed_string_handler_base_t& handler) {
-    check_connectivity();
-    auto prefixed_path = format_path(path);
+auto connection_t::create(const path_t& path, const value_t& value, bool ephemeral, bool sequence,
+                          replier_ptr<create_reply_t> handler) -> void
+{
     auto acl = ZOO_OPEN_ACL_UNSAFE;
     int flag = ephemeral ? ZOO_EPHEMERAL : 0;
     flag = flag | (sequence ? ZOO_SEQUENCE : 0);
-    handler.set_prefix(cfg.prefix);
-    check_rc(
-        zoo_acreate(zhandle().get(), prefixed_path.c_str(), value.c_str(), value.size(), &acl, flag, &handler_dispatcher_t::string_cb, mc_ptr(&handler))
-    );
+    zoo_command(zoo_acreate, path, std::move(handler), create_cb, value.c_str(), value.size(), &acl, flag);
 }
 
-void
-connection_t::del(const path_t& path, version_t version, std::unique_ptr<void_handler_base_t> handler) {
-    check_connectivity();
-    auto prefixed_path = format_path(path);
-    check_rc(
-        zoo_adelete(zhandle().get(), prefixed_path.c_str(), version, &handler_dispatcher_t::void_cb, c_ptr(handler.get()))
-    );
-    handler.release();
+auto connection_t::del(const path_t& path, replier_ptr<del_reply_t> handler) -> void {
+    del(path, -1, std::move(handler));
 }
 
-void
-connection_t::exists(const path_t& path, managed_stat_handler_base_t& handler, managed_watch_handler_base_t& watch) {
-    check_connectivity();
-    auto prefixed_path = format_path(path);
-    check_rc(
-        zoo_awexists(zhandle().get(), prefixed_path.c_str(), &handler_dispatcher_t::watcher_cb, mc_ptr(&watch), &handler_dispatcher_t::stat_cb, mc_ptr(&handler))
-    );
+auto connection_t::del(const path_t& path, version_t version, replier_ptr<del_reply_t> handler) -> void {
+    zoo_command(zoo_adelete, path, std::move(handler), delete_cb, version);
 }
 
-void
-connection_t::childs(const path_t& path, managed_strings_stat_handler_base_t& handler, managed_watch_handler_base_t& watch) {
-    check_connectivity();
-    auto prefixed_path = format_path(path);
-    check_rc(
-        zoo_awget_children2(zhandle().get(), prefixed_path.c_str(), &handler_dispatcher_t::watcher_cb, mc_ptr(&watch), &handler_dispatcher_t::strings_stat_cb, mc_ptr(&handler))
-    );
+auto connection_t::exists(const path_t& path, replier_ptr<exists_reply_t> handler) -> void {
+    exists(path, std::move(handler), nullptr);
 }
 
-void
-connection_t::childs(const path_t& path, managed_strings_stat_handler_base_t& handler) {
-    check_connectivity();
-    auto prefixed_path = format_path(path);
-    check_rc(
-        zoo_awget_children2(zhandle().get(), prefixed_path.c_str(), nullptr, nullptr, &handler_dispatcher_t::strings_stat_cb, mc_ptr(&handler))
-    );
+auto connection_t::exists(const path_t& path, replier_ptr<exists_reply_t> handler, replier_ptr<watch_reply_t> watcher) -> void {
+    zoo_watched_command(zoo_awexists, path, std::move(handler), exists_cb, std::move(watcher));
 }
 
-void connection_t::check_connectivity() {
+auto connection_t::childs(const path_t& path, replier_ptr<children_reply_t> handler) -> void {
+    childs(path, std::move(handler), nullptr);
+}
+
+auto connection_t::childs(const path_t& path, replier_ptr<children_reply_t> handler, replier_ptr<watch_reply_t> watcher) -> void {
+    zoo_watched_command(zoo_awget_children2, path, std::move(handler), children_cb, std::move(watcher));
+}
+
+auto connection_t::check_connectivity() -> void {
     _zhandle.apply([&](handle_ptr& handle) {
         if(!handle.get() || is_unrecoverable(handle.get())) {
             reconnect(handle);
@@ -204,21 +246,20 @@ void connection_t::check_connectivity() {
     });
 }
 
-void connection_t::check_rc(int rc) const {
+auto connection_t::check_rc(int rc) const -> void {
     if(rc != ZOK) {
         auto code = cocaine::error::make_error_code(static_cast<cocaine::error::zookeeper_errors>(rc));
         throw std::system_error(code);
     }
 }
 
-void connection_t::reconnect() {
+auto connection_t::reconnect() -> void {
     _zhandle.apply([&](handle_ptr& h) {
         reconnect(h);
     });
 }
 
-void connection_t::reconnect(handle_ptr& old_zhandle) {
-
+auto connection_t::reconnect(handle_ptr& old_zhandle) -> void {
     handle_ptr new_zhandle = init();
     if(!new_zhandle.get() || is_unrecoverable(new_zhandle.get())) {
         if(session.valid()) {
@@ -240,7 +281,7 @@ void connection_t::reconnect(handle_ptr& old_zhandle) {
     old_zhandle.swap(new_zhandle);
 }
 
-connection_t::handle_ptr connection_t::init() {
+auto connection_t::init() -> connection_t::handle_ptr {
     zhandle_t* new_zhandle = zookeeper_init(cfg.connection_string().c_str(),
                                             &handler_dispatcher_t::watcher_cb,
                                             cfg.recv_timeout_ms,
@@ -250,13 +291,13 @@ connection_t::handle_ptr connection_t::init() {
     return handle_ptr(new_zhandle, std::bind(&connection_t::close, this, std::placeholders::_1));
 }
 
-void connection_t::close(zhandle_t* handle) {
+auto connection_t::close(zhandle_t* handle) -> void{
     executor->spawn([=]{
         zookeeper_close(handle);
     });
 }
 
-void connection_t::create_prefix() {
+auto connection_t::create_prefix() -> void {
     if (!cfg.prefix.empty()) {
         auto count = std::count(cfg.prefix.begin(), cfg.prefix.end(), '/');
         auto acl = ZOO_OPEN_ACL_UNSAFE;
@@ -272,7 +313,8 @@ void connection_t::create_prefix() {
         }
     }
 }
-void connection_t::reconnect_action_t::watch_event(int type, int state, path_t /*path*/) {
+
+auto connection_t::reconnect_action_t::watch_event(int type, int state, path_t /*path*/) -> void {
     if(type == ZOO_SESSION_EVENT) {
         if (state == ZOO_CONNECTED_STATE) {
             parent.create_prefix();
@@ -290,4 +332,5 @@ void connection_t::reconnect_action_t::watch_event(int type, int state, path_t /
         }
     }
 }
+
 }

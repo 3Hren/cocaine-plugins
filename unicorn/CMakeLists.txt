@@ -11,15 +11,15 @@ ADD_LIBRARY(unicorn MODULE
     src/repository/zookeeper.cpp
     src/service/unicorn.cpp
     src/unicorn/zookeeper.cpp
-    src/unicorn/zookeeper/children_subscribe.cpp
-    src/unicorn/zookeeper/create.cpp
-    src/unicorn/zookeeper/del.cpp
+#    src/unicorn/zookeeper/children_subscribe.cpp
+#    src/unicorn/zookeeper/create.cpp
+#    src/unicorn/zookeeper/del.cpp
     src/unicorn/zookeeper/errors.cpp
-    src/unicorn/zookeeper/increment.cpp
-    src/unicorn/zookeeper/lock_state.cpp
-    src/unicorn/zookeeper/lock.cpp
-    src/unicorn/zookeeper/put.cpp
-    src/unicorn/zookeeper/subscribe.cpp
+#    src/unicorn/zookeeper/increment.cpp
+#    src/unicorn/zookeeper/lock_state.cpp
+#    src/unicorn/zookeeper/lock.cpp
+#    src/unicorn/zookeeper/put.cpp
+#    src/unicorn/zookeeper/subscribe.cpp
     src/zookeeper/connection.cpp
     src/zookeeper/handler.cpp
     src/zookeeper/session.cpp

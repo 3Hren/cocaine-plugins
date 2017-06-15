@@ -125,8 +125,33 @@ public:
 
 using node_stat = Stat;
 
-template <class T>
-class safe {
+struct abortable_t {
+    virtual
+    ~abortable_t() {}
+
+    virtual
+    auto abort_with_current_exception() -> void = 0;
+};
+
+template<class Reply>
+class action: public zookeeper::replier<Reply>, public virtual abortable_t {
+public:
+    action() {}
+
+    virtual
+    auto on_reply(Reply reply) -> void = 0;
+
+    auto operator()(Reply reply) -> void override {
+        try {
+            on_reply(std::move(reply));
+        } catch(...) {
+            abort_with_current_exception();
+        }
+    }
+};
+
+template <class T, class... Args>
+class safe: public action<Args>... {
 public:
 
 private:
@@ -160,7 +185,7 @@ public:
     }
 
     virtual
-    auto abort_with_current_exception() -> void {
+    auto abort_with_current_exception() -> void override {
         _scope->closed.apply([&](bool& closed){
             _scope->on_abort();
             if(!closed) {
@@ -170,7 +195,6 @@ public:
         });
     }
 
-    virtual
     auto abort(std::exception_ptr eptr) -> void {
         try {
             std::rethrow_exception(eptr);
@@ -180,32 +204,9 @@ public:
     }
 };
 
-template<class Reply>
-class action: public zookeeper::replier<Reply> {
-public:
-//    action() : safe<T>(nullptr) {}
-    action() {}
-
-    virtual
-    auto on_reply(Reply reply) -> void = 0;
-
-    virtual
-    auto abort_with_current_exception() -> void = 0;
-
-    auto operator()(Reply reply) -> void override {
-        try {
-            on_reply(std::move(reply));
-        } catch(...) {
-            abort_with_current_exception();
-        }
-    }
-};
-
 class zookeeper_t::put_t:
         public std::enable_shared_from_this<put_t>,
-        public safe<put_result_t>,
-        public action<zookeeper::put_reply_t>,
-        public action<zookeeper::get_reply_t>
+        public safe<put_result_t, zookeeper::put_reply_t, zookeeper::get_reply_t>
 {
     zookeeper_t& parent;
     path_t path;
@@ -248,8 +249,7 @@ public:
 
 class zookeeper_t::get_t:
         public std::enable_shared_from_this<get_t>,
-        public safe<versioned_value_t>,
-        public action<zookeeper::get_reply_t>
+        public safe<versioned_value_t, zookeeper::get_reply_t>
 {
     zookeeper_t& parent;
     path_t path;
@@ -277,8 +277,7 @@ public:
 
 class zookeeper_t::create_t:
         public std::enable_shared_from_this<create_t>,
-        public safe<bool>,
-        public action<zookeeper::create_reply_t>
+        public safe<bool, zookeeper::create_reply_t>
 {
     zookeeper_t& parent;
     path_t path;
@@ -324,8 +323,7 @@ public:
 
 class zookeeper_t::del_t:
         public std::enable_shared_from_this<del_t>,
-        public safe<bool>,
-        public action<zookeeper::del_reply_t>
+        public safe<bool, zookeeper::del_reply_t>
 {
     zookeeper_t& parent;
     path_t path;
@@ -354,10 +352,7 @@ public:
 
 class zookeeper_t::subscribe_t:
         public std::enable_shared_from_this<subscribe_t>,
-        public safe<versioned_value_t>,
-        public action<zookeeper::exists_reply_t>,
-        public action<zookeeper::get_reply_t>,
-        public action<zookeeper::watch_reply_t>
+        public safe<versioned_value_t, zookeeper::exists_reply_t, zookeeper::get_reply_t, zookeeper::watch_reply_t>
 {
     zookeeper_t& parent;
     path_t path;
@@ -416,9 +411,7 @@ public:
 
 class zookeeper_t::children_subscribe_t:
         public std::enable_shared_from_this<children_subscribe_t>,
-        public safe<response::children_subscribe>,
-        public action<zookeeper::children_reply_t>,
-        public action<zookeeper::watch_reply_t>
+        public safe<response::children_subscribe, zookeeper::children_reply_t, zookeeper::watch_reply_t>
 {
     zookeeper_t& parent;
     path_t path;
@@ -460,10 +453,7 @@ public:
 
 class zookeeper_t::increment_t:
     public std::enable_shared_from_this<increment_t>,
-    safe<versioned_value_t>,
-    public action<zookeeper::get_reply_t>,
-    public action<zookeeper::create_reply_t>,
-    public action<zookeeper::put_reply_t>
+    public safe<versioned_value_t, zookeeper::get_reply_t, zookeeper::create_reply_t, zookeeper::put_reply_t>
 {
     zookeeper_t& parent;
     path_t path;
@@ -520,12 +510,7 @@ public:
 
 class zookeeper_t::lock_t :
     public std::enable_shared_from_this<lock_t>,
-    public safe<bool>,
-    public action<zookeeper::create_reply_t>,
-    public action<zookeeper::children_reply_t>,
-    public action<zookeeper::watch_reply_t>,
-    public action<zookeeper::exists_reply_t>,
-    public action<zookeeper::del_reply_t>
+    public safe<bool, zookeeper::create_reply_t, zookeeper::children_reply_t, zookeeper::exists_reply_t, zookeeper::del_reply_t, zookeeper::watch_reply_t>
 {
 public:
     struct lock_scope_t: public scope_t {
@@ -685,8 +670,6 @@ zookeeper_t::zookeeper_t(cocaine::context_t& _context, const std::string& _name,
 
 zookeeper_t::~zookeeper_t() = default;
 
-
-//TODO: do we need impl functions? lamdas maybe will be ok
 auto zookeeper_t::put(callback::put callback, const path_t& path, const value_t& value, version_t version) -> scope_ptr {
     return run_command<put_t>(std::move(callback), path, value, version);
 }
