@@ -15,8 +15,8 @@
 
 #pragma once
 
-#include "cocaine/detail/zookeeper/handler.hpp"
-#include "cocaine/detail/zookeeper/session.hpp"
+#include "cocaine/zookeeper/handler.hpp"
+#include "cocaine/zookeeper/session.hpp"
 
 #include <cocaine/locked_ptr.hpp>
 #include <cocaine/api/executor.hpp>

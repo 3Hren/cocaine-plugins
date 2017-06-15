@@ -15,13 +15,17 @@
 
 #pragma once
 
+#include <zookeeper/zookeeper.h>
+
 #include <string>
 
+namespace cocaine {
 namespace zookeeper {
 
 typedef std::string path_t;
 typedef std::string value_t;
 typedef long long version_t;
+typedef Stat node_stat;
 
 /**
 * Get nth parent of path (starting from 1)
@@ -44,4 +48,5 @@ get_sequence_from_node_name_or_path(const path_t& path);
 std::string
 get_node_name(const path_t& path);
 
-}
+} // namespace zookeeper
+} // namespace cocaine

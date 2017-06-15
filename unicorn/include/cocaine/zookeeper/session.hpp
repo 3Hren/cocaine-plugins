@@ -17,6 +17,7 @@
 
 #include <zookeeper/zookeeper.h>
 
+namespace cocaine {
 namespace zookeeper {
 
 /**
@@ -52,3 +53,4 @@ private:
 };
 
 } //namespace zookeeper
+} //namespace cocaine
