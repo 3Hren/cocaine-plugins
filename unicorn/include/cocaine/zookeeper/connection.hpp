@@ -55,18 +55,6 @@ public:
     std::vector<endpoint_t> endpoints;
 };
 
-template<class... Args>
-struct replier {
-    virtual
-    auto operator()(Args... args) -> void = 0;
-
-    virtual
-    ~replier(){}
-};
-
-template<class... Args>
-using replier_ptr = std::shared_ptr<replier<Args...>>;
-
 struct put_reply_t {
     int rc;
     const stat_t& stat;
@@ -103,6 +91,29 @@ struct children_reply_t {
     std::vector<std::string> children;
     const stat_t& stat;
 };
+
+template<class T>
+struct replier {
+    virtual
+    auto operator()(T reply) -> void = 0;
+
+    virtual
+    ~replier(){}
+};
+
+template<>
+struct replier<create_reply_t> {
+    virtual
+    auto operator()(create_reply_t reply) -> void = 0;
+
+    virtual
+    ~replier(){}
+
+    std::string prefix;
+};
+
+template<class... Args>
+using replier_ptr = std::shared_ptr<replier<Args...>>;
 
 /**
 * Adapter class to zookeeper C api.
@@ -156,6 +167,8 @@ private:
     auto close(zhandle_t* handle) -> void;
 
     auto check_connectivity() -> void;
+
+    auto cancel_watches() -> void;
 
     static auto check_rc(int rc) -> void;
 

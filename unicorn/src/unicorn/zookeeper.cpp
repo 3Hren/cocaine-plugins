@@ -462,26 +462,24 @@ public:
         auto close() -> void override {
             closed.apply([&](bool& closed){
                 if(!closed) {
-                    BOOST_ASSERT(parent);
-                    if(!parent->created_sequence_node.empty()) {
-                        auto lock_path = parent->folder + "/" + parent->created_sequence_node;
-                        try {
-                            parent->parent.zk.del(lock_path, parent->shared_from_this());
-                        } catch(const std::system_error& e) {
-                            COCAINE_LOG_ERROR(parent->parent.log, "can not delete lock on {} - {}, reconnecting as a last resort",
-                                              lock_path, error::to_string(e));
-                            parent->parent.zk.reconnect();
-                        }
-                    }
+                    on_abort();
                     closed = true;
-                    parent = nullptr;
                 }
             });
         }
 
         auto on_abort() -> void override {
+            BOOST_ASSERT(parent);
             if(!parent->created_sequence_node.empty()) {
-                parent->parent.zk.del(parent->created_sequence_node, parent->shared_from_this());
+                auto lock_path = parent->folder + "/" + parent->created_sequence_node;
+                try {
+                    parent->parent.zk.del(lock_path, parent->shared_from_this());
+                } catch(const std::system_error& e) {
+                    COCAINE_LOG_ERROR(parent->parent.log, "can not delete lock on {} - {}, reconnecting as a last resort",
+                                      lock_path, error::to_string(e));
+                    parent->parent.zk.reconnect();
+                }
+                parent = nullptr;
             }
         }
     };
@@ -571,9 +569,7 @@ private:
 
     auto on_reply(watch_reply_t reply) -> void override {
         if(reply.type == ZOO_DELETED_EVENT) {
-            satisfy(true);
-        } else if(reply.type == ZOO_SESSION_EVENT) {
-            throw error_t(error::connection_loss, "session event {} {}, possible disconnection", reply.type, reply.state);
+            return satisfy(true);
         }
         throw_watch_event(reply);
     }

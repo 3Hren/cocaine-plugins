@@ -24,10 +24,7 @@
 #include <zookeeper/zookeeper.h>
 
 #include <algorithm>
-#include <errno.h>
-#include <stdexcept>
 #include <string>
-#include <cocaine/errors.hpp>
 
 namespace cocaine {
 namespace zookeeper {
@@ -59,7 +56,6 @@ cfg_t::endpoint_t::to_string() const {
     //Zookeeper handles even ipv6 addresses correctly in this case
     return hostname + ':' + std::to_string(port);
 }
-
 
 cfg_t::cfg_t(std::vector<cfg_t::endpoint_t> _endpoints, unsigned int _recv_timeout_ms, std::string _prefix):
     recv_timeout_ms(_recv_timeout_ms),
@@ -93,6 +89,7 @@ zookeeper::connection_t::connection_t(const cfg_t& _cfg, const session_t& _sessi
         cfg.prefix.resize(cfg.prefix.size() - 1);
     }
     reconnect();
+    create_prefix();
 }
 
 path_t zookeeper::connection_t::format_path(const path_t& path) {
@@ -116,7 +113,12 @@ auto get_cb(int rc, const char* value, int value_len, const stat_t* stat, const 
 
 auto create_cb(int rc, const char* path, const void* data) -> void {
     auto replier = unpack_ptr<create_reply_t>(data);
-    replier->operator()({rc, rc ? std::string() : path});
+    std::string created_path;
+    if(!rc) {
+        // Adjust path ptr by prefix size
+        created_path = path + replier->prefix.size();
+    }
+    replier->operator()({rc, std::move(created_path)});
 }
 
 auto delete_cb(int rc, const void* data) -> void {
@@ -142,7 +144,6 @@ auto children_cb(int rc, const struct String_vector* strings, const stat_t* stat
     replier->operator()({rc, std::move(children), rc ? empty_stat : *stat});
 }
 
-//TODO: rework this
 auto watch_cb(zhandle_t* zh, int type, int state, const char* path, void* watch_data) -> void {
     connection_t* c = const_cast<connection_t*>(reinterpret_cast<const connection_t*>(zoo_get_context(zh)));
     auto watcher = c->watchers.apply([&](connection_t::watchers_t& watchers) -> replier_ptr<watch_reply_t> {
@@ -155,16 +156,12 @@ auto watch_cb(zhandle_t* zh, int type, int state, const char* path, void* watch_
             return nullptr;
         }
     });
-    if(type == ZOO_SESSION_EVENT) {
-        //TODO: write code here.
-        std::cerr << "\nSESSION EVENT " << state_to_string(state) << " " << path << " " << watch_data << "\n";
-        return;
-    } else {
-        std::cerr << "\nEVENT " << event_to_string(type) << " " << state_to_string(state) << " " << path << " " << watch_data << "\n";
-    }
     if(watcher) {
-        std::cerr << "\nCALLING WATCHER\n";
-        watcher->operator()({type, state, path});
+        std::string watched_path;
+        if(path){
+            watched_path = path + c->cfg.prefix.size();
+        }
+        watcher->operator()({type, state, std::move(watched_path)});
     }
 }
 
@@ -192,7 +189,6 @@ auto connection_t::zoo_watched_command(ZooFunction f, const path_t& path, Replie
             return reinterpret_cast<void*>(id);
         });
         zoo_command(f, path, std::forward<Replier>(replier), cb, std::forward<Args>(args)..., watch_cb, id);
-        std::cerr << "\nSETTING WATCH on path " << path << " " << id << "\n";
     } else {
         zoo_command(f, path, std::forward<Replier>(replier), cb, std::forward<Args>(args)..., nullptr, nullptr);
     }
@@ -208,7 +204,6 @@ auto connection_t::get(const path_t& path, replier_ptr<get_reply_t> handler) -> 
 }
 
 auto connection_t::get(const path_t& path, replier_ptr<get_reply_t> handler, replier_ptr<watch_reply_t> watcher) -> void {
-    std::cerr << "\nGET: " << watcher.get() << "\n";
     zoo_watched_command(zoo_awget, path, std::move(handler), get_cb, std::move(watcher));
 }
 
@@ -218,6 +213,7 @@ auto connection_t::create(const path_t& path, const std::string& value, bool eph
     auto acl = ZOO_OPEN_ACL_UNSAFE;
     int flag = ephemeral ? ZOO_EPHEMERAL : 0;
     flag = flag | (sequence ? ZOO_SEQUENCE : 0);
+    handler->prefix = cfg.prefix;
     zoo_command(zoo_acreate, path, std::move(handler), create_cb, value.c_str(), value.size(), &acl, flag);
 }
 
@@ -253,6 +249,17 @@ auto connection_t::check_connectivity() -> void {
     });
 }
 
+auto connection_t::cancel_watches() -> void {
+    watchers_t watchers_for_cancellation;
+    watchers.apply([&](watchers_t& watchers) mutable {
+        watchers_for_cancellation.swap(watchers);
+    });
+    watch_reply_t reply {ZOO_SESSION_EVENT, ZOO_EXPIRED_SESSION_STATE, ""};
+    for(auto& w: watchers_for_cancellation) {
+        w.second->operator()(reply);
+    }
+}
+
 auto connection_t::check_rc(int rc) -> void {
     if(rc != ZOK) {
         throw error_t(map_zoo_error(rc), "can not perform operation - {}", zerror(rc));
@@ -285,12 +292,7 @@ auto connection_t::reconnect(zhandle_ptr& old_zhandle) -> void {
         }
     }
     old_zhandle.swap(new_zhandle);
-    watchers.apply([&](watchers_t& watchers){
-        watch_reply_t reply {ZOO_SESSION_EVENT, ZOO_EXPIRED_SESSION_STATE, ""};
-        for(auto& w: watchers) {
-            w.second->operator()(reply);
-        }
-    });
+    cancel_watches();
 }
 
 auto connection_t::init() -> connection_t::zhandle_ptr {

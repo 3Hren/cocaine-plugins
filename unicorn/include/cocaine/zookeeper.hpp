@@ -40,11 +40,6 @@ auto path_parent(const path_t& path, unsigned int depth) -> path_t;
 */
 auto is_valid_sequence_node(const path_t& path) -> bool;
 
-/**
-* Get sequence number from nodes created via automated sequence
-*/
-auto get_sequence_from_node_name_or_path(const path_t& path) -> unsigned long;
-
 auto get_node_name(const path_t& path) -> std::string;
 
 /**

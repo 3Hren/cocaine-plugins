@@ -16,57 +16,39 @@
 #include "cocaine/zookeeper.hpp"
 #include "cocaine/traits/unicorn.hpp"
 
+#include <boost/algorithm/string/find.hpp>
+
 #include <cocaine/dynamic.hpp>
 #include <cocaine/errors.hpp>
+
+#include <iostream>
 
 namespace cocaine {
 namespace zookeeper {
 
-path_t
-path_parent(const path_t& path, unsigned int depth) {
+auto path_parent(const path_t& path, unsigned int depth) -> path_t {
+    if(path.empty()) {
+        throw error_t("invalid path for path parent - {}", path);
+    }
     if(depth == 0) {
         return path;
     }
-    size_t last_char = path.size();
-    size_t pos = std::string::npos;
-    for (size_t i = 0; i < depth; i++) {
-        pos = path.find_last_of('/', last_char);
-        if (pos == path.size() - 1) {
-            last_char = pos - 1;
-            pos = path.find_last_of('/', last_char);
-        }
-        if (pos == std::string::npos || pos == 0) {
-            throw std::runtime_error("could not get " + std::to_string(depth) + " level parent from path: " + path);
-        }
-        last_char = pos - 1;
+    auto it = boost::find_nth(path, "/", -depth);
+    if(it.empty()) {
+        throw error_t("could not get {} level parent from path: {}", depth, path);
     }
-    return path.substr(0, pos);
+    return path.substr(0, it.begin() - path.begin());
 }
 
-bool is_valid_sequence_node(const path_t& path) {
-    return !path.empty() && isdigit(static_cast<unsigned char>(path[path.size()-1]));
+auto is_valid_sequence_node(const path_t& path) -> bool {
+    static unsigned int zoo_sequence_length = 10;
+    return path.size() - path.find_last_not_of("0123456789") - 1 == zoo_sequence_length;
 }
 
-unsigned long
-get_sequence_from_node_name_or_path(const path_t& path) {
-    if(!is_valid_sequence_node(path)) {
-        throw std::system_error(cocaine::error::invalid_node_name);
-    }
-    auto pos = path.size()-1;
-    unsigned char ch = static_cast<unsigned char>(path[pos]);
-    while(isdigit(ch)) {
-        pos--;
-        ch =  static_cast<unsigned char>(path[pos]);
-    }
-    pos++;
-    return std::stoul(path.substr(pos));
-}
-
-std::string
-get_node_name(const path_t& path) {
+auto get_node_name(const path_t& path) -> std::string {
     auto pos = path.find_last_of('/');
     if(pos == std::string::npos || pos == path.size()-1) {
-        throw std::system_error(cocaine::error::invalid_path);
+        throw error_t(cocaine::error::invalid_path, "invalid path specified - {}", path);
     }
     return path.substr(pos+1);
 }
@@ -143,7 +125,6 @@ auto state_to_string(int state) -> std::string {
     }
     return "unknown";
 }
-
 
 } // namespace zookeeper
 } // namespace cocaine
