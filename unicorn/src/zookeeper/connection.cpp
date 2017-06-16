@@ -285,6 +285,12 @@ auto connection_t::reconnect(zhandle_ptr& old_zhandle) -> void {
         }
     }
     old_zhandle.swap(new_zhandle);
+    watchers.apply([&](watchers_t& watchers){
+        watch_reply_t reply {ZOO_SESSION_EVENT, ZOO_EXPIRED_SESSION_STATE, ""};
+        for(auto& w: watchers) {
+            w.second->operator()(reply);
+        }
+    });
 }
 
 auto connection_t::init() -> connection_t::zhandle_ptr {

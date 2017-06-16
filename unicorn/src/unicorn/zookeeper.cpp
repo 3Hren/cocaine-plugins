@@ -50,14 +50,18 @@ cfg_t make_zk_config(const dynamic_t& args) {
     const auto& cfg = args.as_object();
     const auto& endpoints_cfg = cfg.at("endpoints", dynamic_t::empty_array).as_array();
     std::vector<cfg_t::endpoint_t> endpoints;
-    for(size_t i = 0; i < endpoints_cfg.size(); i++) {
-        endpoints.emplace_back(endpoints_cfg[i].as_object().at("host").as_string(),
-                               endpoints_cfg[i].as_object().at("port").as_uint());
+    for(const auto& ep: endpoints_cfg) {
+        endpoints.emplace_back(ep.as_object().at("host").as_string(), ep.as_object().at("port").as_uint());
     }
     if(endpoints.empty()) {
         endpoints.emplace_back("localhost", 2181);
     }
     return cfg_t(endpoints, cfg.at("recv_timeout_ms", 1000u).as_uint(), cfg.at("prefix", "").as_string());
+}
+
+auto throw_watch_event(const watch_reply_t& reply) -> void {
+    throw error_t(error::connection_loss, "watch occured with \"{}\" type, \"{}\" state event on \"{}\" path",
+                  event_to_string(reply.type), state_to_string(reply.state), reply.path);
 }
 
 }
@@ -90,9 +94,6 @@ class action: public replier<Reply>, public virtual abortable_t {
 public:
     action() {}
 
-    virtual
-    auto on_reply(Reply reply) -> void = 0;
-
     auto operator()(Reply reply) -> void override {
         try {
             on_reply(std::move(reply));
@@ -100,13 +101,14 @@ public:
             abort_with_current_exception();
         }
     }
+
+private:
+    virtual
+    auto on_reply(Reply reply) -> void = 0;
 };
 
 template <class T, class... Args>
 class safe: public std::enable_shared_from_this<safe<T, Args...>>, public action<Args>... {
-public:
-
-private:
     std::shared_ptr<scope_t> _scope;
     future_callback<T> wrapped;
 
@@ -172,12 +174,14 @@ public:
     {}
 
     auto run() -> void {
+        parent.zk.reconnect();
         if(version < 0) {
             throw error_t(error::version_not_allowed, "negative version is not allowed for put");
         }
         parent.zk.put(path, serialize(value), version, shared_from_this());
     }
 
+private:
     auto on_reply(put_reply_t reply) -> void override {
         if(reply.rc == ZBADVERSION) {
             parent.zk.get(path, shared_from_this());
@@ -212,6 +216,7 @@ public:
         parent.zk.get(path, shared_from_this());
     }
 
+private:
     auto on_reply(get_reply_t reply) -> void override {
         if (reply.rc != 0) {
             throw error_t(map_zoo_error(reply.rc), "failure during getting node value - {}", zerror(reply.rc));
@@ -246,6 +251,7 @@ public:
         parent.zk.create(path, serialize(value), ephemeral, sequence, shared_from_this());
     }
 
+private:
     auto on_reply(create_reply_t reply) -> void override {
         if(reply.rc == ZOK) {
             if(depth == 0) {
@@ -279,16 +285,17 @@ public:
         version(version)
     {}
 
+    auto run() -> void {
+        parent.zk.del(path, version, shared_from_this());
+    }
+
+private:
     auto on_reply(del_reply_t reply) -> void override {
         if (reply.rc != 0) {
             throw error_t(map_zoo_error(reply.rc), "failure during deleting node - {}", zerror(reply.rc));
         } else {
             satisfy(true);
         }
-    }
-
-    auto run() -> void {
-        parent.zk.del(path, version, shared_from_this());
     }
 };
 
@@ -308,6 +315,7 @@ public:
         parent.zk.exists(path, shared_from_this(), shared_from_this());
     }
 
+private:
     auto on_reply(get_reply_t reply) -> void override {
         COCAINE_LOG_DEBUG(parent.log, "handling get reply in subscription on {}", path);
         if(reply.rc) {
@@ -344,11 +352,8 @@ public:
             throw error_t(map_zoo_error(ZNONODE), "node was removed");
         } else if(type == ZOO_CHILD_EVENT) {
             throw error_t(error::child_not_allowed, "child created on watched node");
-        } else if(type == ZOO_SESSION_EVENT){
-            throw error_t(error::connection_loss, "session event {}, possibly lost connection");
         }
-        throw error_t(error::connection_loss, "watch occured with {} type, {} state event on \"{}\" path",
-                      type, state, reply.path);
+        throw_watch_event(reply);
     }
 };
 
@@ -367,6 +372,7 @@ public:
         parent.zk.childs(path, shared_from_this(), shared_from_this());
     }
 
+private:
     auto on_reply(children_reply_t reply) -> void override {
         if(reply.rc) {
             throw error_t(map_zoo_error(reply.rc), "can not fetch children - {}", zerror(reply.rc));
@@ -386,10 +392,8 @@ public:
             return parent.zk.childs(path, shared_from_this(), shared_from_this());
         } else if(reply.type == ZOO_SESSION_EVENT) {
             throw error_t(error::connection_loss, "session event {} {}, possible disconnection", reply.type, reply.state);
-        } else {
-            throw error_t(error::connection_loss, "watch occured with {} type, {} state event on \"{}\" path",
-                          reply.type, reply.state, reply.path);
         }
+        throw_watch_event(reply);
     }
 };
 
@@ -412,6 +416,7 @@ public:
         parent.zk.get(path, shared_from_this());
     }
 
+private:
     auto on_reply(get_reply_t reply) -> void override {
         if(reply.rc == ZNONODE) {
             return parent.zk.create(path, serialize(value), false, false, shared_from_this());
@@ -482,7 +487,6 @@ public:
     };
 
 private:
-    callback::lock wrapped;
     zookeeper_t& parent;
     path_t folder;
     path_t path;
@@ -493,7 +497,6 @@ private:
 public:
     lock_t(callback::lock wrapped, zookeeper_t& parent, path_t folder) :
         safe(std::make_shared<lock_scope_t>(), std::move(wrapped)),
-        wrapped(std::move(wrapped)),
         parent(parent),
         folder(std::move(folder)),
         path(this->folder + "/lock"),
@@ -508,6 +511,7 @@ public:
         parent.zk.create(path, serialize(value), true, true, shared_from_this());
     }
 
+private:
     auto on_reply(create_reply_t reply) -> void override {
         if(reply.rc == ZOK) {
             if(depth == 0) {
@@ -570,10 +574,8 @@ public:
             satisfy(true);
         } else if(reply.type == ZOO_SESSION_EVENT) {
             throw error_t(error::connection_loss, "session event {} {}, possible disconnection", reply.type, reply.state);
-        } else {
-            throw error_t(error::connection_loss, "watch occured with {} type, {} state event on \"{}\" path",
-                          reply.type, reply.state, reply.path);
         }
+        throw_watch_event(reply);
     }
 
     auto on_reply(del_reply_t reply) -> void override {
