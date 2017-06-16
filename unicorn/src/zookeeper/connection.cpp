@@ -13,12 +13,10 @@
 * GNU General Public License for more details.
 */
 
-#include "cocaine/detail/zookeeper/connection.hpp"
-#include "cocaine/detail/zookeeper/handler.hpp"
-#include "cocaine/detail/zookeeper/session.hpp"
+#include "cocaine/zookeeper/connection.hpp"
+#include "cocaine/zookeeper/session.hpp"
 
-#include "cocaine/detail/zookeeper/errors.hpp"
-
+#include <cocaine/errors.hpp>
 #include <cocaine/executor/asio.hpp>
 
 #include <boost/optional/optional.hpp>
@@ -48,8 +46,6 @@ auto unpack_ptr(const void* raw_ptr) -> replier_ptr<T> {
 
 }
 
-
-
 cfg_t::endpoint_t::endpoint_t(std::string _hostname, unsigned int _port) :
     hostname(std::move(_hostname)),
     port(_port)
@@ -58,7 +54,7 @@ cfg_t::endpoint_t::endpoint_t(std::string _hostname, unsigned int _port) :
 std::string
 cfg_t::endpoint_t::to_string() const {
     if(hostname.empty() || port == 0) {
-        throw cocaine::error_t("invalid connection endpoint");
+        throw error_t("invalid connection endpoint");
     }
     //Zookeeper handles even ipv6 addresses correctly in this case
     return hostname + ':' + std::to_string(port);
@@ -101,20 +97,20 @@ zookeeper::connection_t::connection_t(const cfg_t& _cfg, const session_t& _sessi
 
 path_t zookeeper::connection_t::format_path(const path_t& path) {
     if(path.empty() || path[0] != '/') {
-        throw cocaine::error_t(cocaine::error::unicorn_errors::invalid_path);
+        throw error_t(error::unicorn_errors::invalid_path, "invalid path provided");
     }
     return cfg.prefix + path;
 }
 
-auto put_cb(int rc, const connection_t::stat_t* stat, const void* data) -> void {
+auto put_cb(int rc, const stat_t* stat, const void* data) -> void {
     auto replier = unpack_ptr<put_reply_t>(data);
-    connection_t::stat_t empty_stat = {};
+    stat_t empty_stat = {};
     replier->operator()({rc, rc ? empty_stat : *stat});
 }
 
-auto get_cb(int rc, const char* value, int value_len, const connection_t::stat_t* stat, const void* data) -> void {
+auto get_cb(int rc, const char* value, int value_len, const stat_t* stat, const void* data) -> void {
     auto replier = unpack_ptr<get_reply_t>(data);
-    connection_t::stat_t empty_stat = {};
+    stat_t empty_stat = {};
     replier->operator()({rc, rc ? std::string() : std::string(value, value_len), rc ? empty_stat : *stat});
 }
 
@@ -128,16 +124,16 @@ auto delete_cb(int rc, const void* data) -> void {
     replier->operator()({rc});
 }
 
-auto exists_cb(int rc, const connection_t::stat_t* stat, const void* data) -> void {
+auto exists_cb(int rc, const stat_t* stat, const void* data) -> void {
     auto replier = unpack_ptr<exists_reply_t>(data);
-    connection_t::stat_t empty_stat = {};
+    stat_t empty_stat = {};
     replier->operator()({rc, rc ? empty_stat : *stat});
 }
 
-auto children_cb(int rc, const struct String_vector* strings, const connection_t::stat_t* stat, const void* data) -> void {
+auto children_cb(int rc, const struct String_vector* strings, const stat_t* stat, const void* data) -> void {
     auto replier = unpack_ptr<children_reply_t>(data);
     std::vector<std::string> children;
-    connection_t::stat_t empty_stat = {};
+    stat_t empty_stat = {};
     if(!rc) {
         for(int i = 0; i < strings->count; i++) {
             children.emplace_back(strings->data[i]);
@@ -161,12 +157,13 @@ auto watch_cb(zhandle_t* zh, int type, int state, const char* path, void* watch_
     });
     if(type == ZOO_SESSION_EVENT) {
         //TODO: write code here.
-        std::cerr << "\nSESSION EVENT " << state << " " << path << " " << watch_data << "\n";
+        std::cerr << "\nSESSION EVENT " << state_to_string(state) << " " << path << " " << watch_data << "\n";
         return;
     } else {
-        std::cerr << "\nEVENT " << type << " " << state << " " << path << " " << watch_data << "\n";
+        std::cerr << "\nEVENT " << event_to_string(type) << " " << state_to_string(state) << " " << path << " " << watch_data << "\n";
     }
     if(watcher) {
+        std::cerr << "\nCALLING WATCHER\n";
         watcher->operator()({type, state, path});
     }
 }
@@ -202,7 +199,7 @@ auto connection_t::zoo_watched_command(ZooFunction f, const path_t& path, Replie
 };
 
 
-auto connection_t::put(const path_t& path, const value_t& value, version_t version, replier_ptr<put_reply_t> handler) -> void {
+auto connection_t::put(const path_t& path, const std::string& value, version_t version, replier_ptr<put_reply_t> handler) -> void {
     zoo_command(zoo_aset, path, std::move(handler), put_cb, value.c_str(), value.size(), version);
 }
 
@@ -211,10 +208,11 @@ auto connection_t::get(const path_t& path, replier_ptr<get_reply_t> handler) -> 
 }
 
 auto connection_t::get(const path_t& path, replier_ptr<get_reply_t> handler, replier_ptr<watch_reply_t> watcher) -> void {
+    std::cerr << "\nGET: " << watcher.get() << "\n";
     zoo_watched_command(zoo_awget, path, std::move(handler), get_cb, std::move(watcher));
 }
 
-auto connection_t::create(const path_t& path, const value_t& value, bool ephemeral, bool sequence,
+auto connection_t::create(const path_t& path, const std::string& value, bool ephemeral, bool sequence,
                           replier_ptr<create_reply_t> handler) -> void
 {
     auto acl = ZOO_OPEN_ACL_UNSAFE;
@@ -257,8 +255,7 @@ auto connection_t::check_connectivity() -> void {
 
 auto connection_t::check_rc(int rc) -> void {
     if(rc != ZOK) {
-        auto code = map_error(cocaine::error::make_error_code(static_cast<cocaine::error::zookeeper_errors>(rc));
-        throw std::system_error(code);
+        throw error_t(map_zoo_error(rc), "can not perform operation - {}", zerror(rc));
     }
 }
 

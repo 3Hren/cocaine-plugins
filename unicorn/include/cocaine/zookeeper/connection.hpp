@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include "cocaine/zookeeper/handler.hpp"
+#include "cocaine/zookeeper.hpp"
 #include "cocaine/zookeeper/session.hpp"
 
 #include <cocaine/locked_ptr.hpp>
@@ -48,16 +48,10 @@ public:
 
     cfg_t(std::vector<endpoint_t> endpoints, unsigned int recv_timeout_ms, std::string prefix);
 
-    /**
-    * ZK connection string.
-    * ZK accepts several host:port values of a cluster splitted by comma.
-    */
     auto connection_string() const -> std::string;
 
     const unsigned int recv_timeout_ms;
     std::string prefix;
-
-private:
     std::vector<endpoint_t> endpoints;
 };
 
@@ -75,13 +69,13 @@ using replier_ptr = std::shared_ptr<replier<Args...>>;
 
 struct put_reply_t {
     int rc;
-    const node_stat& stat;
+    const stat_t& stat;
 };
 
 struct get_reply_t {
     int rc;
     std::string data;
-    const node_stat& stat;
+    const stat_t& stat;
 };
 
 struct watch_reply_t {
@@ -101,13 +95,13 @@ struct del_reply_t {
 
 struct exists_reply_t {
     int rc;
-    const node_stat& stat;
+    const stat_t& stat;
 };
 
 struct children_reply_t {
     int rc;
     std::vector<std::string> children;
-    const node_stat& stat;
+    const stat_t& stat;
 };
 
 /**
@@ -116,24 +110,19 @@ struct children_reply_t {
 */
 class connection_t {
 public:
-    typedef std::shared_ptr<zhandle_t> zhandle_ptr;
-    using stat_t = struct Stat;
+    using zhandle_ptr = std::shared_ptr<zhandle_t>;
     using watchers_t = std::map<size_t, replier_ptr<watch_reply_t>>;
 
     connection_t(const cfg_t& cfg, const session_t& session);
     connection_t(const connection_t&) = delete;
     connection_t& operator=(const connection_t&) = delete;
 
-    /**
-    * put value to path. If version in ZK is different returns an error.
-    * See zoo_aset.
-    */
-    auto put(const path_t& path, const value_t& value, version_t version, replier_ptr<put_reply_t> handler) -> void;
+    auto put(const path_t& path, const std::string& value, version_t version, replier_ptr<put_reply_t> handler) -> void;
 
     auto get(const path_t& path, replier_ptr<get_reply_t> handler) -> void;
     auto get(const path_t& path, replier_ptr<get_reply_t> handler, replier_ptr<watch_reply_t> watcher) -> void;
 
-    auto create(const path_t& path, const value_t& value, bool ephemeral, bool sequence, replier_ptr<create_reply_t> handler) -> void;
+    auto create(const path_t& path, const std::string& value, bool ephemeral, bool sequence, replier_ptr<create_reply_t> handler) -> void;
 
     auto del(const path_t& path, version_t version, replier_ptr<del_reply_t> handler) -> void;
     auto del(const path_t& path, replier_ptr<del_reply_t> handler) -> void;

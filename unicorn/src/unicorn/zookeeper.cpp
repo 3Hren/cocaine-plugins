@@ -13,17 +13,17 @@
 * GNU General Public License for more details.
 */
 
-#include "cocaine/detail/unicorn/zookeeper.hpp"
-#include "cocaine/detail/zookeeper/errors.hpp"
-#include "cocaine/detail/zookeeper/handler.hpp"
+#include "cocaine/unicorn/zookeeper.hpp"
 #include "cocaine/service/unicorn.hpp"
 #include "cocaine/traits/dynamic.hpp"
 #include "cocaine/unicorn/value.hpp"
+#include "cocaine/zookeeper.hpp"
 
 #include <cocaine/context.hpp>
 #include <cocaine/executor/asio.hpp>
 #include <cocaine/errors.hpp>
 #include <cocaine/format.hpp>
+#include <cocaine/format/vector.hpp>
 #include <cocaine/logging.hpp>
 #include <cocaine/utility/future.hpp>
 
@@ -36,22 +36,20 @@
 
 #include <zookeeper/zookeeper.h>
 
+using namespace cocaine::zookeeper;
+
 namespace cocaine {
 namespace unicorn {
+
+namespace {
 
 template<class T>
 using future_callback = std::function<void(std::future<T>)>;
 
-using put_result_t = std::tuple<bool, unicorn::versioned_value_t>;
-
-typedef api::unicorn_scope_ptr scope_ptr;
-
-namespace {
-
-zookeeper::cfg_t make_zk_config(const dynamic_t& args) {
+cfg_t make_zk_config(const dynamic_t& args) {
     const auto& cfg = args.as_object();
     const auto& endpoints_cfg = cfg.at("endpoints", dynamic_t::empty_array).as_array();
-    std::vector<zookeeper::cfg_t::endpoint_t> endpoints;
+    std::vector<cfg_t::endpoint_t> endpoints;
     for(size_t i = 0; i < endpoints_cfg.size(); i++) {
         endpoints.emplace_back(endpoints_cfg[i].as_object().at("host").as_string(),
                                endpoints_cfg[i].as_object().at("port").as_uint());
@@ -59,51 +57,10 @@ zookeeper::cfg_t make_zk_config(const dynamic_t& args) {
     if(endpoints.empty()) {
         endpoints.emplace_back("localhost", 2181);
     }
-    return zookeeper::cfg_t(endpoints, cfg.at("recv_timeout_ms", 1000u).as_uint(), cfg.at("prefix", "").as_string());
+    return cfg_t(endpoints, cfg.at("recv_timeout_ms", 1000u).as_uint(), cfg.at("prefix", "").as_string());
 }
 
 }
-
-
-zookeeper::value_t serialize(const value_t& val) {
-    msgpack::sbuffer buffer;
-    msgpack::packer<msgpack::sbuffer> packer(buffer);
-    cocaine::io::type_traits<cocaine::dynamic_t>::pack(packer, val);
-    return std::string(buffer.data(), buffer.size());
-}
-
-value_t unserialize(const zookeeper::value_t& val) {
-    msgpack::object obj;
-    std::unique_ptr<msgpack::zone> z(new msgpack::zone());
-
-    msgpack_unpack_return ret = msgpack_unpack(
-            val.c_str(), val.size(), nullptr, z.get(),
-            reinterpret_cast<msgpack_object*>(&obj)
-    );
-
-    //Only strict unparse.
-    if(static_cast<msgpack::unpack_return>(ret) != msgpack::UNPACK_SUCCESS) {
-        throw std::system_error(cocaine::error::unicorn_errors::invalid_value);
-    }
-    value_t target;
-    cocaine::io::type_traits<cocaine::dynamic_t>::unpack(obj, target);
-    return target;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 class scope_t: public api::unicorn_scope_t {
@@ -120,8 +77,6 @@ public:
     auto on_abort() -> void {}
 };
 
-using node_stat = Stat;
-
 struct abortable_t {
     virtual
     ~abortable_t() {}
@@ -131,7 +86,7 @@ struct abortable_t {
 };
 
 template<class Reply>
-class action: public zookeeper::replier<Reply>, public virtual abortable_t {
+class action: public replier<Reply>, public virtual abortable_t {
 public:
     action() {}
 
@@ -148,7 +103,7 @@ public:
 };
 
 template <class T, class... Args>
-class safe: public action<Args>... {
+class safe: public std::enable_shared_from_this<safe<T, Args...>>, public action<Args>... {
 public:
 
 private:
@@ -201,9 +156,7 @@ public:
     }
 };
 
-class zookeeper_t::put_t:
-        public std::enable_shared_from_this<put_t>,
-        public safe<put_result_t, zookeeper::put_reply_t, zookeeper::get_reply_t>
+class zookeeper_t::put_t: public safe<response::put, put_reply_t, get_reply_t>
 {
     zookeeper_t& parent;
     path_t path;
@@ -218,13 +171,14 @@ public:
             version(version)
     {}
 
-    using safe::abort_with_current_exception;
-
     auto run() -> void {
+        if(version < 0) {
+            throw error_t(error::version_not_allowed, "negative version is not allowed for put");
+        }
         parent.zk.put(path, serialize(value), version, shared_from_this());
     }
 
-    auto on_reply(zookeeper::put_reply_t reply) -> void override {
+    auto on_reply(put_reply_t reply) -> void override {
         if(reply.rc == ZBADVERSION) {
             parent.zk.get(path, shared_from_this());
         } else if(reply.rc != 0) {
@@ -234,7 +188,7 @@ public:
         }
     }
 
-    auto on_reply(zookeeper::get_reply_t reply) -> void override {
+    auto on_reply(get_reply_t reply) -> void override {
         if (reply.rc) {
             throw error_t(map_zoo_error(reply.rc), "failure during getting new node value - {}", zerror(reply.rc));
         } else {
@@ -244,10 +198,7 @@ public:
 };
 
 
-class zookeeper_t::get_t:
-        public std::enable_shared_from_this<get_t>,
-        public safe<versioned_value_t, zookeeper::get_reply_t>
-{
+class zookeeper_t::get_t: public safe<versioned_value_t, get_reply_t> {
     zookeeper_t& parent;
     path_t path;
 public:
@@ -261,7 +212,7 @@ public:
         parent.zk.get(path, shared_from_this());
     }
 
-    auto on_reply(zookeeper::get_reply_t reply) -> void override {
+    auto on_reply(get_reply_t reply) -> void override {
         if (reply.rc != 0) {
             throw error_t(map_zoo_error(reply.rc), "failure during getting node value - {}", zerror(reply.rc));
         } else if (reply.stat.numChildren != 0) {
@@ -272,10 +223,7 @@ public:
     }
 };
 
-class zookeeper_t::create_t:
-        public std::enable_shared_from_this<create_t>,
-        public safe<bool, zookeeper::create_reply_t>
-{
+class zookeeper_t::create_t: public safe<bool, create_reply_t> {
     zookeeper_t& parent;
     path_t path;
     value_t value;
@@ -298,7 +246,7 @@ public:
         parent.zk.create(path, serialize(value), ephemeral, sequence, shared_from_this());
     }
 
-    auto on_reply(zookeeper::create_reply_t reply) -> void override {
+    auto on_reply(create_reply_t reply) -> void override {
         if(reply.rc == ZOK) {
             if(depth == 0) {
                 satisfy(true);
@@ -307,21 +255,18 @@ public:
                 parent.zk.create(path, serialize(value), ephemeral, sequence, shared_from_this());
             } else {
                 depth--;
-                parent.zk.create(zookeeper::path_parent(path, depth), "", false, false, shared_from_this());
+                parent.zk.create(path_parent(path, depth), "", false, false, shared_from_this());
             }
         } else if(reply.rc == ZNONODE) {
             depth++;
-            parent.zk.create(zookeeper::path_parent(path, depth), "", false, false, shared_from_this());
+            parent.zk.create(path_parent(path, depth), "", false, false, shared_from_this());
         } else {
             throw error_t(map_zoo_error(reply.rc), "failure during creating node - {}", zerror(reply.rc));
         }
     }
 };
 
-class zookeeper_t::del_t:
-        public std::enable_shared_from_this<del_t>,
-        public safe<bool, zookeeper::del_reply_t>
-{
+class zookeeper_t::del_t: public safe<bool, del_reply_t> {
     zookeeper_t& parent;
     path_t path;
     version_t version;
@@ -334,7 +279,7 @@ public:
         version(version)
     {}
 
-    auto on_reply(zookeeper::del_reply_t reply) -> void override {
+    auto on_reply(del_reply_t reply) -> void override {
         if (reply.rc != 0) {
             throw error_t(map_zoo_error(reply.rc), "failure during deleting node - {}", zerror(reply.rc));
         } else {
@@ -347,10 +292,7 @@ public:
     }
 };
 
-class zookeeper_t::subscribe_t:
-        public std::enable_shared_from_this<subscribe_t>,
-        public safe<versioned_value_t, zookeeper::exists_reply_t, zookeeper::get_reply_t, zookeeper::watch_reply_t>
-{
+class zookeeper_t::subscribe_t: public safe<versioned_value_t, exists_reply_t, get_reply_t, watch_reply_t> {
     zookeeper_t& parent;
     path_t path;
 
@@ -362,10 +304,12 @@ public:
     {}
 
     auto run() -> void {
+        COCAINE_LOG_DEBUG(parent.log, "unicorn subscribe started on {}", path);
         parent.zk.exists(path, shared_from_this(), shared_from_this());
     }
 
-    auto on_reply(zookeeper::get_reply_t reply) -> void override {
+    auto on_reply(get_reply_t reply) -> void override {
+        COCAINE_LOG_DEBUG(parent.log, "handling get reply in subscription on {}", path);
         if(reply.rc) {
             throw error_t(map_zoo_error(reply.rc), "node was removed - {}", zerror(reply.rc));
         } else if (reply.stat.numChildren != 0) {
@@ -375,7 +319,8 @@ public:
         }
     }
 
-    auto on_reply(zookeeper::exists_reply_t reply) -> void override {
+    auto on_reply(exists_reply_t reply) -> void override {
+        COCAINE_LOG_DEBUG(parent.log, "handling exists reply in subscription on {}", path);
         if(reply.rc == ZOK) {
             parent.zk.get(path, shared_from_this(), shared_from_this());
         } else {
@@ -383,17 +328,18 @@ public:
         }
     }
 
-    auto on_reply(zookeeper::watch_reply_t reply) -> void override {
+    auto on_reply(watch_reply_t reply) -> void override {
+        COCAINE_LOG_DEBUG(parent.log, "handling watch reply in subscription on {}", path);
         //TODO: is it ok?
         if(scope()->closed.unsafe()){
             return;
         }
         auto type = reply.type;
-        auto state = reply.state
+        auto state = reply.state;
         if(type == ZOO_CREATED_EVENT || type == ZOO_CHANGED_EVENT ||
                 (type == ZOO_SESSION_EVENT && state == ZOO_CONNECTED_STATE)
         ) {
-            return parent.zk.get(path, shared_from_this());
+            return parent.zk.get(path, shared_from_this(), shared_from_this());
         } else if(type == ZOO_DELETED_EVENT) {
             throw error_t(map_zoo_error(ZNONODE), "node was removed");
         } else if(type == ZOO_CHILD_EVENT) {
@@ -406,10 +352,7 @@ public:
     }
 };
 
-class zookeeper_t::children_subscribe_t:
-        public std::enable_shared_from_this<children_subscribe_t>,
-        public safe<response::children_subscribe, zookeeper::children_reply_t, zookeeper::watch_reply_t>
-{
+class zookeeper_t::children_subscribe_t: public safe<response::children_subscribe, children_reply_t, watch_reply_t> {
     zookeeper_t& parent;
     path_t path;
 
@@ -424,7 +367,7 @@ public:
         parent.zk.childs(path, shared_from_this(), shared_from_this());
     }
 
-    auto on_reply(zookeeper::children_reply_t reply) -> void override {
+    auto on_reply(children_reply_t reply) -> void override {
         if(reply.rc) {
             throw error_t(map_zoo_error(reply.rc), "can not fetch children - {}", zerror(reply.rc));
         } else {
@@ -432,26 +375,25 @@ public:
         }
     }
 
-    auto on_reply(zookeeper::watch_reply_t reply) -> void override {
+    auto on_reply(watch_reply_t reply) -> void override {
         //TODO: is it ok?
         if(scope()->closed.unsafe()){
             return;
         }
-        if(reply.type == ZOO_CHILD_EVENT || (reply.type == ZOO_SESSION_EVENT && reply.state == ZOO_CONNECTED_STATE)) {
+        if(reply.type == ZOO_DELETED_EVENT) {
+            throw error_t(error::no_node, "watched node was deleted");
+        } else if(reply.type == ZOO_CHILD_EVENT || (reply.type == ZOO_SESSION_EVENT && reply.state == ZOO_CONNECTED_STATE)) {
             return parent.zk.childs(path, shared_from_this(), shared_from_this());
         } else if(reply.type == ZOO_SESSION_EVENT) {
             throw error_t(error::connection_loss, "session event {} {}, possible disconnection", reply.type, reply.state);
         } else {
             throw error_t(error::connection_loss, "watch occured with {} type, {} state event on \"{}\" path",
-                          type, state, reply.path);
+                          reply.type, reply.state, reply.path);
         }
     }
 };
 
-class zookeeper_t::increment_t:
-    public std::enable_shared_from_this<increment_t>,
-    public safe<versioned_value_t, zookeeper::get_reply_t, zookeeper::create_reply_t, zookeeper::put_reply_t>
-{
+class zookeeper_t::increment_t: public safe<versioned_value_t, get_reply_t, create_reply_t, put_reply_t> {
     zookeeper_t& parent;
     path_t path;
     value_t value;
@@ -470,7 +412,7 @@ public:
         parent.zk.get(path, shared_from_this());
     }
 
-    auto on_reply(zookeeper::get_reply_t reply) -> void override {
+    auto on_reply(get_reply_t reply) -> void override {
         if(reply.rc == ZNONODE) {
             return parent.zk.create(path, serialize(value), false, false, shared_from_this());
         } else if(reply.rc) {
@@ -489,14 +431,14 @@ public:
         parent.zk.put(path, serialize(value), reply.stat.version, shared_from_this());
     }
 
-    auto on_reply(zookeeper::put_reply_t reply) -> void override {
+    auto on_reply(put_reply_t reply) -> void override {
         if(reply.rc) {
             throw error_t(map_zoo_error(reply.rc), "failed to put new node value - {}", zerror(reply.rc));
         }
         satisfy(versioned_value_t(value, reply.stat.version));
     }
 
-    auto on_reply(zookeeper::create_reply_t reply) -> void override {
+    auto on_reply(create_reply_t reply) -> void override {
         if(reply.rc) {
             throw error_t(map_zoo_error(reply.rc), "could not create value - {}", zerror(reply.rc));
         } else {
@@ -505,32 +447,36 @@ public:
     }
 };
 
-class zookeeper_t::lock_t :
-    public std::enable_shared_from_this<lock_t>,
-    public safe<bool, zookeeper::create_reply_t, zookeeper::children_reply_t, zookeeper::exists_reply_t, zookeeper::del_reply_t, zookeeper::watch_reply_t>
-{
+class zookeeper_t::lock_t : public safe<bool, create_reply_t, children_reply_t, exists_reply_t, del_reply_t, watch_reply_t> {
 public:
     struct lock_scope_t: public scope_t {
-        lock_t* parent;
+        std::shared_ptr<lock_t> parent;
 
-        lock_scope_t(lock_t* parent):
-                parent(parent)
-        {}
+        lock_scope_t() {}
 
         auto close() -> void override {
             closed.apply([&](bool& closed){
                 if(!closed) {
-                    if(!parent->created_sequence_path.empty()) {
-                        parent->parent.zk.del(parent->created_sequence_path, parent->shared_from_this());
+                    BOOST_ASSERT(parent);
+                    if(!parent->created_sequence_node.empty()) {
+                        auto lock_path = parent->folder + "/" + parent->created_sequence_node;
+                        try {
+                            parent->parent.zk.del(lock_path, parent->shared_from_this());
+                        } catch(const std::system_error& e) {
+                            COCAINE_LOG_ERROR(parent->parent.log, "can not delete lock on {} - {}, reconnecting as a last resort",
+                                              lock_path, error::to_string(e));
+                            parent->parent.zk.reconnect();
+                        }
                     }
                     closed = true;
+                    parent = nullptr;
                 }
             });
         }
 
         auto on_abort() -> void override {
-            if(!parent->created_sequence_path.empty()) {
-                parent->parent.zk.del(parent->created_sequence_path, parent->shared_from_this());
+            if(!parent->created_sequence_node.empty()) {
+                parent->parent.zk.del(parent->created_sequence_node, parent->shared_from_this());
             }
         }
     };
@@ -540,34 +486,37 @@ private:
     zookeeper_t& parent;
     path_t folder;
     path_t path;
-    path_t created_sequence_path;
+    path_t created_sequence_node;
     value_t value;
     uint64_t depth;
 
 public:
     lock_t(callback::lock wrapped, zookeeper_t& parent, path_t folder) :
-        safe(std::make_shared<lock_scope_t>(this), std::move(wrapped)),
+        safe(std::make_shared<lock_scope_t>(), std::move(wrapped)),
         wrapped(std::move(wrapped)),
         parent(parent),
         folder(std::move(folder)),
-        path(folder + "/lock"),
+        path(this->folder + "/lock"),
         value(time(nullptr)),
         depth(0)
     {}
 
     auto run() -> void {
+        //TODO: What can we do with this ugly hack with dynamic_cast?
+        std::dynamic_pointer_cast<lock_scope_t>(scope())->parent = std::dynamic_pointer_cast<lock_t>(shared_from_this());
+        COCAINE_LOG_DEBUG(parent.log, "starting lock operation on path {}, folder {}", path, folder);
         parent.zk.create(path, serialize(value), true, true, shared_from_this());
     }
 
-    auto on_reply(zookeeper::create_reply_t reply) -> void override {
+    auto on_reply(create_reply_t reply) -> void override {
         if(reply.rc == ZOK) {
             if(depth == 0) {
                 return scope()->closed.apply([&](bool& closed){
-                    created_sequence_path = reply.created_path;
+                    created_sequence_node = get_node_name(reply.created_path);
                     if(!closed) {
                         parent.zk.childs(folder, shared_from_this());
                     } else {
-                        parent.zk.del(created_sequence_path, shared_from_this());
+                        parent.zk.del(created_sequence_node, shared_from_this());
                     }
                 });
             } else if(depth == 1) {
@@ -575,23 +524,24 @@ public:
                 parent.zk.create(path, serialize(value), true, true, shared_from_this());
             } else {
                 depth--;
-                parent.zk.create(zookeeper::path_parent(path, depth), "", false, false, shared_from_this());
+                parent.zk.create(path_parent(path, depth), "", false, false, shared_from_this());
             }
         } else if(reply.rc == ZNONODE) {
             depth++;
-            parent.zk.create(zookeeper::path_parent(path, depth), "", false, false, shared_from_this());
+            parent.zk.create(path_parent(path, depth), "", false, false, shared_from_this());
         } else {
             throw error_t(map_zoo_error(reply.rc), "failure during creating node - {}", zerror(reply.rc));
         }
     }
 
-    auto on_reply(zookeeper::children_reply_t reply) -> void override {
+    auto on_reply(children_reply_t reply) -> void override {
         if(reply.rc) {
             throw error_t(map_zoo_error(reply.rc), "failed to get lock folder children - {}", zerror(reply.rc));
         }
         auto& children = reply.children;
         std::sort(children.begin(), children.end());
-        auto it = std::find(children.begin(), children.end(), created_sequence_path);
+        COCAINE_LOG_DEBUG(parent.log, "children - {}, created path - {}", children, created_sequence_node);
+        auto it = std::find(children.begin(), children.end(), created_sequence_node);
         if(it == children.end()) {
             throw error_t("created path is not found in children");
         }
@@ -599,7 +549,7 @@ public:
             return satisfy(true);
         } else {
             it--;
-            if(!zookeeper::is_valid_sequence_node(*it)) {
+            if(!is_valid_sequence_node(*it)) {
                 throw error_t("trash data in lock folder");
             }
             auto next_node = folder + "/" + *it;
@@ -607,7 +557,7 @@ public:
         }
     }
 
-    auto on_reply(zookeeper::exists_reply_t reply) -> void override {
+    auto on_reply(exists_reply_t reply) -> void override {
         if(reply.rc == ZNONODE) {
             satisfy(true);
         } else if(reply.rc) {
@@ -615,7 +565,7 @@ public:
         }
     }
 
-    auto on_reply(zookeeper::watch_reply_t reply) -> void override {
+    auto on_reply(watch_reply_t reply) -> void override {
         if(reply.type == ZOO_DELETED_EVENT) {
             satisfy(true);
         } else if(reply.type == ZOO_SESSION_EVENT) {
@@ -626,7 +576,7 @@ public:
         }
     }
 
-    auto on_reply(zookeeper::del_reply_t reply) -> void override {
+    auto on_reply(del_reply_t reply) -> void override {
         if(reply.rc) {
             COCAINE_LOG_ERROR(parent.log, "failed to delete lock, reconnecting");
             parent.zk.reconnect();
@@ -636,7 +586,7 @@ public:
 
 
 template<class Action, class Callback, class... Args>
-auto zookeeper_t::run_command(Callback callback, Args&& ...args) -> api::unicorn_scope_ptr {
+auto zookeeper_t::run_command(Callback callback, Args&& ...args) -> scope_ptr {
     auto action = std::make_shared<Action>(std::move(callback), *this, std::forward<Args>(args)...);
     try {
         action->run();

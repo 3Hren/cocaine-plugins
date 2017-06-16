@@ -14,16 +14,17 @@ ADD_LIBRARY(unicorn MODULE
 #    src/unicorn/zookeeper/children_subscribe.cpp
 #    src/unicorn/zookeeper/create.cpp
 #    src/unicorn/zookeeper/del.cpp
-    src/unicorn/zookeeper/errors.cpp
+
 #    src/unicorn/zookeeper/increment.cpp
 #    src/unicorn/zookeeper/lock_state.cpp
 #    src/unicorn/zookeeper/lock.cpp
 #    src/unicorn/zookeeper/put.cpp
 #    src/unicorn/zookeeper/subscribe.cpp
+    src/zookeeper.cpp
     src/zookeeper/connection.cpp
-    src/zookeeper/handler.cpp
+#    src/zookeeper/errors.cpp
+#    src/zookeeper/handler.cpp
     src/zookeeper/session.cpp
-    src/zookeeper/zookeeper.cpp
 )
 
 TARGET_LINK_LIBRARIES(unicorn

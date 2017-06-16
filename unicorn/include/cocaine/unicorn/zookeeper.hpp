@@ -17,37 +17,12 @@
 
 #include "cocaine/api/unicorn.hpp"
 
-#include "cocaine/detail/zookeeper/connection.hpp"
+#include "cocaine/zookeeper/connection.hpp"
 
 #include <cocaine/idl/unicorn.hpp>
 
-namespace cocaine { namespace unicorn {
-
-template<class T>
-class scoped_wrapper;
-
-//zookeeper::cfg_t make_zk_config(const dynamic_t& args);
-
-/**
-* Serializes service representation of value to zookepeers representation.
-* Currently ZK store msgpacked data, and service uses cocaine::dynamic_t
-*/
-zookeeper::value_t
-serialize(const value_t& val);
-
-/**
-* Unserializes zookepeers representation to service representation.
-*/
-value_t
-unserialize(const zookeeper::value_t& val);
-
-
-//TODO: Remove
-struct zookeeper_scope_t: public api::unicorn_scope_t {
-    std::shared_ptr<zookeeper::handler_scope_t> handler_scope;
-    virtual
-    ~zookeeper_scope_t() {}
-};
+namespace cocaine {
+namespace unicorn {
 
 class zookeeper_t :
     public api::unicorn_t
