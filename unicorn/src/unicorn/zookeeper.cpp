@@ -66,10 +66,11 @@ auto throw_watch_event(const watch_reply_t& reply) -> void {
 
 }
 
-
 class scope_t: public api::unicorn_scope_t {
 public:
-    synchronized<bool> closed;
+    // This recursive mutex seems to be best solution to prevent dead locks in bad designed unicorn api.
+    // And yes, I will burn in hell for this.
+    synchronized<bool, std::recursive_mutex> closed;
 
     auto close() -> void override {
         closed.apply([&](bool& closed){
