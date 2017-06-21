@@ -544,19 +544,19 @@ private:
         auto& children = reply.children;
         std::sort(children.begin(), children.end());
         COCAINE_LOG_DEBUG(parent.log, "children - {}, created path - {}", children, created_sequence_node);
-        auto it = std::find(children.begin(), children.end(), created_sequence_node);
-        if(it == children.end()) {
+        auto it_pair = std::equal_range(children.begin(), children.end(), created_sequence_node);
+        if(it_pair.first == it_pair.second) {
             throw error_t("created path is not found in children");
         }
-        if(it == children.begin()) {
+        if(it_pair.first == children.begin()) {
             return satisfy(true);
         } else {
-            it--;
-            if(!is_valid_sequence_node(*it)) {
+            auto previous_it = --it_pair.first;
+            if(!is_valid_sequence_node(*previous_it)) {
                 throw error_t("trash data in lock folder");
             }
-            auto next_node = folder + "/" + *it;
-            parent.zk.exists(next_node, shared_from_this(), shared_from_this());
+            auto prev_node = folder + "/" + *previous_it;
+            parent.zk.exists(prev_node, shared_from_this(), shared_from_this());
         }
     }
 
