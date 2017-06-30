@@ -300,7 +300,7 @@ enabled_t::verify(std::size_t event, const std::string& path, const auth::identi
 
 auto
 enabled_t::make_path(const std::string& prefix) const -> std::string {
-    return cocaine::format("{}/{}", prefix_acls, prefix);
+    return cocaine::format("{}/{}", prefix, prefix_acls);
 }
 
 auto
