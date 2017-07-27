@@ -36,7 +36,7 @@ pool_t::pool_t(context_t& _context, asio::io_service& _io_loop, const std::strin
         logger(context.log(format("vicodyn/pool/{}", service_name))),
         io_loop(_io_loop),
         rebalance_timer(io_loop),
-        balancer(api::vicodyn::balancer(context, io_loop, args.as_object().at("balancer", "core").as_string(), name))
+        balancer(api::vicodyn::balancer(context, io_loop, args.as_object().at("balancer", dynamic_t::empty_object), name))
 {
     signal_dispatcher->on<io::context::shutdown>([=](){
         rebalance_timer.cancel();

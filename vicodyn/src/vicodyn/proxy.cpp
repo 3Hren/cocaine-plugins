@@ -17,7 +17,7 @@ namespace vicodyn {
 
 proxy_t::proxy_t(context_t& context,
                  const std::string& _name,
-                 const dynamic_t& /*args*/,
+                 const dynamic_t& args,
                  unsigned int _version,
                  io::graph_root_t _protocol) :
     io::basic_dispatch_t(_name),
@@ -26,7 +26,7 @@ proxy_t::proxy_t(context_t& context,
     m_protocol(_protocol),
     m_version(_version),
     // TODO: Note here we use acceptor io_loop.
-    pool(context, executor.asio(), _name, dynamic_t::empty_object)
+    pool(context, executor.asio(), _name, args)
 {
     COCAINE_LOG_DEBUG(logger, "created proxy for {}", _name);
 }
