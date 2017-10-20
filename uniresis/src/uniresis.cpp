@@ -136,7 +136,7 @@ private:
                 return;
             }
 
-            notify();
+            self->notify();
         });
     }
 
