@@ -68,7 +68,11 @@ class control_slot_t:
         {
             on<protocol::chunk>([&](int size) {
                 if (auto overseer = p->overseer.lock()) {
-                    overseer->o->control_population(size);
+                    if (size >= 0) {
+                        overseer->o->control_population(boost::make_optional(std::size_t(size)));
+                    } else {
+                        overseer->o->control_population(boost::none);
+                    }
                 }
             });
         }
@@ -78,7 +82,7 @@ class control_slot_t:
         discard(const std::error_code&) {
             COCAINE_LOG_DEBUG(p->log, "client has been disappeared, assuming direct control");
             if (auto overseer = p->overseer.lock()) {
-                overseer->o->control_population(0);
+                overseer->o->control_population(boost::none);
             }
         }
     };

@@ -3,6 +3,8 @@
 #include <deque>
 #include <string>
 
+#include <boost/optional.hpp>
+
 #include <cocaine/rpc/dispatch.hpp>
 
 #include "cocaine/idl/node.hpp"
@@ -60,7 +62,7 @@ public:
     /// Slave pool.
     // TODO: Seems like we need multichannel queue system with size 1 and timeouts.
     synchronized<pool_type> pool;
-    std::atomic<int> pool_target;
+    synchronized<boost::optional<std::size_t>> pool_target;
     synchronized<std::unique_ptr<asio::deadline_timer>> on_spawn_rate_timer;
     std::chrono::system_clock::time_point last_failed;
     std::chrono::seconds last_timeout;
@@ -137,8 +139,9 @@ public:
 
     /// Tries to keep alive at least `count` workers no matter what.
     ///
-    /// Zero value is allowed and means not to spawn workers
-    auto control_population(int count) -> void;
+    /// Zero value is allowed and means not to spawn workers. None value means switching to
+    /// automatic policy.
+    auto control_population(boost::optional<std::size_t> count) -> void;
 
     /// Creates a new handshake dispatch, which will be consumed after a new incoming connection
     /// attached.

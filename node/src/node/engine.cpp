@@ -162,11 +162,18 @@ auto engine_t::uptime() const -> std::chrono::seconds {
     return std::chrono::duration_cast<std::chrono::seconds>(now - birthstamp);
 }
 
-auto engine_t::control_population(int count) -> void {
-    count = std::max(0, count);
-    COCAINE_LOG_DEBUG(log, "changed keep-alive slave count to {}", count);
+auto engine_t::control_population(boost::optional<std::size_t> count) -> void {
+    if (count) {
+        count = std::max(std::size_t(0), *count);
+        COCAINE_LOG_DEBUG(log, "changed keep-alive slave count to {}", *count);
+    } else {
+        COCAINE_LOG_DEBUG(log, "changed keep-alive slave count to automatic");
+    }
 
-    pool_target = count;
+    pool_target.apply([&](boost::optional<std::size_t>& pool_target) {
+        pool_target = count;
+    });
+
     rebalance_slaves();
 }
 
@@ -557,12 +564,11 @@ auto engine_t::rebalance_slaves() -> void {
 
     const auto load = queue->size();
     const auto profile = this->profile();
-
-    const auto manual_target = static_cast<std::size_t>(this->pool_target.load());
+    const auto manual_target = *this->pool_target.synchronize();
 
     std::size_t target;
-    if (manual_target > 0) {
-        target = manual_target;
+    if (manual_target) {
+        target = *manual_target;
     } else {
         if (profile.queue_limit > 0) {
             target = load / profile.grow_threshold;
@@ -578,13 +584,13 @@ auto engine_t::rebalance_slaves() -> void {
                     lack = std::ceil((load - vacant) / static_cast<double>(profile.concurrency));
                 }
 
-                return pool.size() +  lack;
+                return pool.size() + lack;
             });
         }
     }
 
-    // Bound current pool target between [1; limit].
-    target = stdext::clamp(target, 1ul, profile.pool_limit);
+    // Bound current pool target between [0; limit].
+    target = stdext::clamp(target, 0ul, profile.pool_limit);
 
     if (*on_spawn_rate_timer.synchronize()) {
         return;

@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include <boost/optional.hpp>
+
 #include <cocaine/rpc/dispatch.hpp>
 
 #include "cocaine/idl/node.hpp"
@@ -86,8 +88,9 @@ public:
 
     /// Tries to keep alive at least `count` workers no matter what.
     ///
-    /// Zero value is allowed and means not to spawn workers at all.
-    auto control_population(int count) -> void;
+    /// Zero value is allowed and means not to spawn workers at all. None value means switching to
+    /// automatic policy.
+    auto control_population(boost::optional<std::size_t> count) -> void;
 
     /// Creates a new handshake dispatch, which will be consumed after a new incoming connection
     /// attached.

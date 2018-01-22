@@ -38,7 +38,7 @@ overseer_t::~overseer_t() {
 
     engine->stats.deregister();
     engine->stopped = true;
-    engine->control_population(0);
+    engine->control_population(boost::none);
     engine->pool->clear();
     engine->on_spawn_rate_timer->reset();
 }
@@ -63,7 +63,7 @@ auto overseer_t::uptime() const -> std::chrono::seconds {
     return engine->uptime();
 }
 
-auto overseer_t::control_population(int count) -> void {
+auto overseer_t::control_population(boost::optional<std::size_t> count) -> void {
     return engine->control_population(count);
 }
 

@@ -80,19 +80,23 @@ class control_slot_t:
             }
 
             on<protocol::chunk>([&](int size) {
-                overseer->control_population(size);
+                if (size >= 0) {
+                    overseer->control_population(boost::make_optional(std::size_t(size)));
+                } else {
+                    overseer->control_population(boost::none);
+                }
             });
             on<protocol::error>([&](std::error_code, const std::string&) {
-                overseer->control_population(0);
+                overseer->control_population(boost::none);
             });
             on<protocol::choke>([&]() {
-                overseer->control_population(0);
+                overseer->control_population(boost::none);
             });
         }
 
         void
         discard(const std::error_code&) override {
-            overseer->control_population(0);
+            overseer->control_population(boost::none);
         }
     };
 
