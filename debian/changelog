@@ -1,3 +1,9 @@
+cocaine-plugins (0.12.14.48) unstable; urgency=medium
+
+  * Fixed: vicodyn: consume node_protocol by the name.
+
+ -- Kirill Smorodinnikov <shaitkir@gmail.com>  Mon, 29 Jan 2018 17:30:33 +0300
+
 cocaine-plugins (0.12.14.47) unstable; urgency=low
 
   * Fixed: catch exception in control slot.
