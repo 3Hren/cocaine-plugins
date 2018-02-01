@@ -1,3 +1,7 @@
+#include <cassert>
+#include <future>
+#include <utility>
+
 #include "cocaine/service/uniresis.hpp"
 
 #include <asio/io_service.hpp>
@@ -7,11 +11,16 @@
 
 #include <cocaine/api/unicorn.hpp>
 #include <cocaine/context.hpp>
+#include <cocaine/context/signal.hpp>
 #include <cocaine/context/config.hpp>
 #include <cocaine/dynamic.hpp>
 #include <cocaine/executor/asio.hpp>
 #include <cocaine/unicorn/value.hpp>
 #include <cocaine/unique_id.hpp>
+
+#include <cocaine/traits/dynamic.hpp>
+#include <cocaine/traits/endpoint.hpp>
+#include <cocaine/traits/vector.hpp>
 
 #include "cocaine/uniresis/error.hpp"
 
@@ -55,6 +64,24 @@ auto resolve(const std::string& hostname) -> std::vector<tcp::endpoint> {
     return endpoints;
 }
 
+template<class T, class Fn>
+struct weak_wrapper_t {
+    weak_wrapper_t(std::weak_ptr<T> self, Fn&& fun):
+        self(std::move(self)),
+        fun(std::move(std::forward<Fn>(fun)))
+    {}
+
+    template<class... Args>
+    auto operator()(Args&&... args) -> void {
+        if (const auto locked = self.lock()) {
+            fun(std::forward<Args>(args)...);
+        }
+    }
+
+    std::weak_ptr<T> self;
+    Fn fun;
+};
+
 } // namespace
 
 /// A task that will try to notify about resources information on the machine.
@@ -67,7 +94,6 @@ class uniresis_t::updater_t : public std::enable_shared_from_this<uniresis_t::up
     std::shared_ptr<api::unicorn_t> unicorn;
     api::unicorn_scope_ptr scope;
     api::unicorn_scope_ptr subscope;
-    executor::owning_asio_t executor;
     asio::deadline_timer timer;
     std::shared_ptr<logging::logger_t> log;
 
@@ -78,7 +104,8 @@ public:
               dynamic_t::object_t extra,
               uniresis::resources_t resources,
               std::shared_ptr<api::unicorn_t> unicorn,
-              std::shared_ptr<logging::logger_t> log) :
+              std::shared_ptr<logging::logger_t> log,
+              asio::io_service &loop) :
         path(std::move(path)),
         hostname(std::move(hostname)),
         endpoints(std::move(endpoints)),
@@ -87,8 +114,7 @@ public:
         unicorn(std::move(unicorn)),
         scope(),
         subscope(),
-        executor(),
-        timer(executor.asio()),
+        timer(loop),
         log(std::move(log))
     {}
 
@@ -96,7 +122,7 @@ public:
     notify() -> void {
         COCAINE_LOG_DEBUG(log, "schedule resource notification on `{}` ...", path);
         scope = unicorn->create(
-            std::bind(&updater_t::on_create, shared_from_this(), ph::_1),
+            weak_wrap_self(std::bind(&updater_t::on_create, this, ph::_1)),
             path,
             make_value(),
             true,
@@ -104,7 +130,23 @@ public:
         );
     }
 
+    auto
+    finalize() -> void {
+        // Smell of various races here!
+        subscope.reset();
+        scope.reset();
+
+        timer.cancel();
+    }
+
 private:
+    using self_type = updater_t;
+
+    template<class Fn>
+    auto weak_wrap_self(Fn&& fun) -> weak_wrapper_t<self_type, Fn> {
+        return weak_wrapper_t<self_type, Fn>(shared_from_this(), std::forward<Fn>(fun));
+    }
+
     auto
     make_value() const -> dynamic_t {
         dynamic_t::object_t result;
@@ -165,7 +207,7 @@ private:
     subscribe() -> void {
         COCAINE_LOG_DEBUG(log, "schedule resource node subscription on `{}` ...", path);
         scope = unicorn->subscribe(
-            std::bind(&updater_t::on_subscribe, shared_from_this(), ph::_1),
+            weak_wrap_self(std::bind(&updater_t::on_subscribe, this, ph::_1)),
             path
         );
     }
@@ -194,7 +236,8 @@ uniresis_t::uniresis_t(context_t& context, asio::io_service& loop, const std::st
     uuid(context.uuid()),
     resources(),
     updater(nullptr),
-    log(context.log("uniresis"))
+    log(context.log("uniresis")),
+    executor(std::make_shared<executor::owning_asio_t>())
 {
     if (resources.cpu == 0) {
         throw std::system_error(uniresis::uniresis_errc::failed_calculate_cpu_count);
@@ -245,7 +288,8 @@ uniresis_t::uniresis_t(context_t& context, asio::io_service& loop, const std::st
         std::move(extra),
         resources,
         std::move(unicorn),
-        log
+        log,
+        executor->asio()
     );
     updater->notify();
 
@@ -260,6 +304,23 @@ uniresis_t::uniresis_t(context_t& context, asio::io_service& loop, const std::st
     on<io::uniresis::uuid>([&] {
         return uuid;
     });
+
+    // Context signal/slot.
+    signal = std::make_shared<dispatch<io::context_tag>>(name);
+    signal->on<io::context::shutdown>(std::bind(&uniresis_t::on_context_shutdown, this));
+
+    context.signal_hub().listen(signal, loop);
+}
+
+auto uniresis_t::on_context_shutdown() -> void {
+    if (updater) {
+        // Check is needed for case if something will send (abnormally)
+        // signal more then once while `signal` wasn't properly reseted.
+        updater->finalize();
+        updater.reset();
+    }
+
+    signal = nullptr;
 }
 
 } // namespace service
