@@ -1,3 +1,9 @@
+cocaine-plugins (0.12.14.50) unstable; urgency=medium
+
+  * Fixed: move scopes' desctruction outside of lock
+
+ -- Kirill Smorodinnikov <shaitkir@gmail.com>  Wed, 21 Feb 2018 15:32:09 +0300
+
 cocaine-plugins (0.12.14.49) unstable; urgency=medium
 
   * Non-maintainer upload.
