@@ -235,7 +235,17 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
                     COCAINE_LOG_INFO(internal_logger, "removed filter {} from metafilter", filter_id);
                 }
                 // subscription ended - remove scope
-                scopes->erase(filter_id);
+                scopes.apply([&](unicorn_scopes_t& _scopes) -> api::unicorn_scope_ptr {
+                    auto it = _scopes.find(filter_id);
+                    if (it == _scopes.end())
+                        return nullptr;
+
+                    // keep scope alive
+                    auto scope = it->second;
+                    _scopes.erase(it);
+                    // return scope to destroy it outside of scopes::m_mutex lock
+                    return std::move(scope);
+                });
             };
 
             try {
@@ -325,7 +335,11 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
             list_scope = unicorn->children_subscribe(on_filter_list, filter_unicorn_path);
             COCAINE_LOG_INFO(internal_logger, "subscribed on filter folder {}", filter_unicorn_path);
         });
-        scopes->clear();
+        {
+            // swap scopes to destroy them outside of scopes::m_mutex lock
+            decltype(scopes)::value_type empty_scopes{};
+            scopes->swap(empty_scopes);
+        }
         create_scope = unicorn->create(std::move(on_create), filter_unicorn_path, unicorn::value_t(), false, false);
         COCAINE_LOG_INFO(internal_logger, "restarted filter subscription");
     }
@@ -392,7 +406,7 @@ struct logging_v2_t::impl_t : public std::enable_shared_from_this<logging_v2_t::
                     _scopes.erase(scope_id);
                 });
             });
-            scopes.apply([&](std::unordered_map<size_t, api::unicorn_scope_ptr>& _scopes) {
+            scopes.apply([&](unicorn_scopes_t& _scopes) {
                 _scopes[scope_id] = unicorn->create(on_create, filter_path(id), info.representation(), false, false);
             });
         } else {
