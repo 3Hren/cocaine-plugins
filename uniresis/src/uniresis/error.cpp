@@ -32,5 +32,5 @@ auto make_error_code(uniresis_errc err) -> std::error_code {
     return std::error_code(static_cast<int>(err), uniresis_category());
 }
 
-}  // namespace tvm
+}  // namespace uniresis
 }  // namespace cocaine

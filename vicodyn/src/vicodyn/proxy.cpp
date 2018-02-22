@@ -357,7 +357,7 @@ private:
         enqueue_headers.clear();
         chunk_headers.clear();
         chunks.clear();
-        COCAINE_LOG_DEBUG(logger, "disabled buffernig");
+        COCAINE_LOG_DEBUG(logger, "disabled buffering");
     }
 
     auto enqueue_unsafe(const hpack::headers_t& headers, std::string event) -> void {
