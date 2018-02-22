@@ -17,6 +17,7 @@
 #include "cocaine/api/vicodyn/balancer.hpp"
 #include "cocaine/gateway/vicodyn.hpp"
 #include "cocaine/vicodyn/balancer/simple.hpp"
+#include "cocaine/vicodyn/error.hpp"
 #include "cocaine/repository/vicodyn/balancer.hpp"
 
 #include <cocaine/errors.hpp>
@@ -32,6 +33,8 @@ validation() -> api::preconditions_t {
 
 void
 initialize(api::repository_t& repository) {
+    cocaine::error::registrar::add(cocaine::vicodyn::vicodyn_category(), cocaine::vicodyn::vicodyn_category_id);
+
     repository.insert<vicodyn::balancer::simple_t>("simple");
     repository.insert<gateway::vicodyn_t>("vicodyn");
 }

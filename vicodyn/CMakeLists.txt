@@ -10,6 +10,7 @@ ADD_LIBRARY(vicodyn SHARED
         src/vicodyn/balancer/simple.cpp
         src/vicodyn/proxy.cpp
         src/vicodyn/peer.cpp
+        src/vicodyn/error.cpp
         )
 
 ADD_DEFINITIONS("-DVICODYN_USE_DEBUG")

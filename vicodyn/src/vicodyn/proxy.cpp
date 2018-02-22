@@ -21,6 +21,7 @@
 #include <cocaine/rpc/slot.hpp>
 
 #include <cocaine/traits/map.hpp>
+#include <cocaine/vicodyn/error.hpp>
 
 namespace cocaine {
 namespace vicodyn {
@@ -175,7 +176,8 @@ public:
             }
             catch(const std::system_error& e) {
                 COCAINE_LOG_WARNING(parent->logger, "failed to send error to forward dispatch - {}", error::to_string(e));
-                parent->backward_stream.error({}, e.code(), "failed to send error to forward dispatch");
+                parent->backward_stream.error({}, make_error_code(vicodyn_errors::failed_to_send_error_to_forward),
+                                              "failed to send error to forward dispatch");
                 parent->peer->schedule_reconnect();
             }
         }
@@ -232,7 +234,8 @@ public:
 
         backward_dispatch.on_discard([&](const std::error_code& ec) {
             try {
-                backward_stream.error({}, ec, "vicodyn upstream has been disconnected");
+                backward_stream.error({}, make_error_code(vicodyn_errors::upstream_disconnected),
+                                      "vicodyn upstream has been disconnected");
             } catch (const std::exception& e) {
                 COCAINE_LOG_WARNING(logger, "could not send error {} to upstream - {}", ec, e);
             }
@@ -283,7 +286,7 @@ public:
                 retry();
             } catch(const std::system_error& e) {
                 COCAINE_LOG_WARNING(logger, "failed to retry enqueue - {}", e.what());
-                backward_stream.error({}, e.code(), e.what());
+                backward_stream.error({}, make_error_code(vicodyn_errors::failed_to_retry_enqueue), e.what());
                 request_context->add_checkpoint("after_recoverable_error_failed_retry");
             }
         } else {
@@ -376,7 +379,8 @@ private:
                 retry_unsafe();
             } catch(std::system_error& e) {
                 COCAINE_LOG_WARNING(logger, "could not retry enqueue - {}", error::to_string(e));
-                backward_stream.error({}, e.code(), "failed to retry enqueue");
+                backward_stream.error({}, make_error_code(vicodyn_errors::failed_to_retry_enqueue),
+                                      "failed to retry enqueue");
             }
         }
     }
