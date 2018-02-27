@@ -571,7 +571,7 @@ auto engine_t::rebalance_slaves() -> void {
         target = *manual_target;
     } else {
         if (profile.queue_limit > 0) {
-            target = load / profile.grow_threshold;
+            target = (load + profile.grow_threshold - 1) / profile.grow_threshold;
         } else {
             target = pool.apply([&](pool_type& pool) {
                 auto pressure = pool_pressure(pool);
