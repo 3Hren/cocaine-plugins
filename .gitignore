@@ -1,8 +1,17 @@
 # Build directory
 build/*
 
+# Debian
+debian/libcocaine-plugin-*/
+debian/libcocaine-plugin-*.log
+debian/libcocaine-plugin-*.debhelper
+debian/libcocaine-plugin-*.substvars
+debian/tmp/
+debian/files
+
 # Compiled files
 *.cocaine-plugin
+obj-x86_64-linux-gnu/
 
 # IDEs
 
