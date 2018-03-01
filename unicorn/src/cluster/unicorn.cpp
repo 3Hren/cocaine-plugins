@@ -165,11 +165,15 @@ auto unicorn_cluster_t::subscriber_t::on_children(std::future<response::children
 auto unicorn_cluster_t::subscriber_t::update_state(std::vector<std::string> nodes) -> void {
     COCAINE_LOG_INFO(parent.log, "received uuid list from zookeeper, got {} uuids", nodes.size());
     std::set<std::string> nodes_set(nodes.begin(), nodes.end());
+    // scopes should be destroyed outside of subscriptions' lock
+    std::vector<api::auto_scope_t> scopes_to_destroy;
     subscriptions.apply([&](subscriptions_t& subscriptions) {
+        scopes_to_destroy.reserve(subscriptions.size());
         for(auto it = subscriptions.begin(); it != subscriptions.end();) {
             if(!nodes_set.count(it->first)) {
                 auto uuid = it->first;
                 parent.locator.drop_node(uuid);
+                scopes_to_destroy.emplace_back(std::move(it->second.scope));
                 it = subscriptions.erase(it);
                 COCAINE_LOG_INFO(parent.log, "dropped node {}", uuid);
             } else {
@@ -187,6 +191,7 @@ auto unicorn_cluster_t::subscriber_t::update_state(std::vector<std::string> node
             } else {
                 COCAINE_LOG_INFO(parent.log, "subscribing on a new node {}", node);
                 auto cb = std::bind(&unicorn_cluster_t::subscriber_t::on_node, this, node, ph::_1);
+                scopes_to_destroy.emplace_back(std::move(subscription.scope));
                 subscription.scope = parent.unicorn->subscribe(std::move(cb), parent.config.path + '/' + node);
             }
         }
@@ -195,11 +200,18 @@ auto unicorn_cluster_t::subscriber_t::update_state(std::vector<std::string> node
 }
 
 auto unicorn_cluster_t::subscriber_t::on_node(std::string uuid, std::future<response::subscribe> future) -> void {
+    // scopes should be destroyed outside of subscriptions' lock
+    std::vector<api::auto_scope_t> scopes_to_destroy;
     subscriptions.apply([&](subscriptions_t& subscriptions) {
+        scopes_to_destroy.reserve(subscriptions.size());
         auto terminate = [&](const std::string& reason) {
             COCAINE_LOG_WARNING(parent.log, "node {} subscription failed - {}", uuid, reason);
             parent.locator.drop_node(uuid);
-            subscriptions.erase(uuid);
+            auto it = subscriptions.find(uuid);
+            if (it == subscriptions.end()) {
+                scopes_to_destroy.emplace_back(std::move(it->second.scope));
+                subscriptions.erase(it);
+            }
         };
 
         try {
