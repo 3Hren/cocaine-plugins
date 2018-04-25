@@ -156,11 +156,14 @@ class control_slot_t:
 
         void
         control_population(boost::optional<std::size_t> population) {
-            auto ovs = node.overseer(app_name);
-            if(!ovs) {
-                upstream.abort(error::node_errors::not_running, "app is not running");
-            } else {
+            try {
+                auto ovs = node.overseer(app_name);
+                if (!ovs) {
+                    throw cocaine::error_t("no overseer");
+                }
                 ovs->control_population(population);
+            } catch(const std::exception& e) {
+                upstream.abort(error::node_errors::not_running, cocaine::format("app is not running, {}", e.what()));
             }
         }
 
