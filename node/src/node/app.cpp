@@ -381,6 +381,7 @@ public:
             maybe_publish();
         } catch (const std::exception&) {
             unpublish();
+            engine->terminate();
             throw;
         }
     }
