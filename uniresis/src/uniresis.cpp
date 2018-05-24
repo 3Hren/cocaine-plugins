@@ -8,10 +8,11 @@
 #include <cocaine/api/unicorn.hpp>
 #include <cocaine/context.hpp>
 #include <cocaine/context/config.hpp>
-#include <cocaine/dynamic.hpp>
 #include <cocaine/executor/asio.hpp>
 #include <cocaine/unicorn/value.hpp>
 #include <cocaine/unique_id.hpp>
+
+#include <cocaine/traits/dynamic.hpp>
 
 #include "cocaine/uniresis/error.hpp"
 
@@ -240,18 +241,18 @@ uniresis_t::uniresis_t(context_t& context, asio::io_service& loop, const std::st
 
     auto hostname = context.config().network().hostname();
     auto endpoints = resolve(hostname);
-    dynamic_t::object_t extra;
     if (auto locator = context.config().services().get("locator")) {
         extra = dynamic_converter<dynamic_t::object_t>::convert(
             locator->args().as_object().at("extra_param", dynamic_t::empty_object)
         );
     }
+
     auto unicorn = api::unicorn(context, args.as_object().at("unicorn", defaults::unicorn_name).as_string());
     updater.reset(new updater_t(
         std::move(path),
         std::move(hostname),
         std::move(endpoints),
-        std::move(extra),
+        extra,
         resources,
         std::move(unicorn),
         *log
@@ -268,6 +269,10 @@ uniresis_t::uniresis_t(context_t& context, asio::io_service& loop, const std::st
 
     on<io::uniresis::uuid>([&] {
         return uuid;
+    });
+
+    on<io::uniresis::extra>([&] {
+        return this->extra;
     });
 }
 

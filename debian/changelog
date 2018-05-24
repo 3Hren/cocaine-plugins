@@ -1,3 +1,10 @@
+cocaine-plugins (0.12.14.57) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Feat: uniresis::extra method.
+
+ -- Alex Karev <karapuz@yandex-team.ru>  Tue, 24 Apr 2018 15:18:10 +0300
+
 cocaine-plugins (0.12.14.56) unstable; urgency=medium
 
   * Non-maintainer upload.

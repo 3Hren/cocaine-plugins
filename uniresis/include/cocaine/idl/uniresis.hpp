@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cocaine/dynamic.hpp>
 #include <cocaine/rpc/protocol.hpp>
+
 
 namespace cocaine {
 namespace io {
@@ -55,6 +57,20 @@ struct uniresis {
             std::string
         >::tag upstream_type;
     };
+
+    struct extra {
+        typedef uniresis_tag tag;
+
+        static constexpr auto alias() -> const char* {
+            return "extra";
+        }
+
+        typedef boost::mpl::list<>::type argument_type;
+
+        typedef option_of<
+            cocaine::dynamic_t
+        >::tag upstream_type;
+    };
 };
 
 template<>
@@ -66,7 +82,8 @@ struct protocol<uniresis_tag> {
     typedef boost::mpl::list<
         uniresis::cpu_count,
         uniresis::memory_count,
-        uniresis::uuid
+        uniresis::uuid,
+        uniresis::extra
     >::type messages;
 };
 
