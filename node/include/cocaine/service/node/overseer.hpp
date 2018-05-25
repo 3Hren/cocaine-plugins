@@ -102,6 +102,9 @@ public:
     /// The handshake message should contain its peer id (likely uuid) by comparing that we either
     /// accept the session or drop it.
     auto prototype() -> std::unique_ptr<io::basic_dispatch_t>;
+
+    /// TODO: Docs.
+    auto stopped_by_control() const -> bool;
 };
 
 }  // namespace node

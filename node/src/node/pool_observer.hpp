@@ -18,6 +18,14 @@ public:
     virtual
     auto
     despawned(const std::string& id) -> void = 0;
+
+    virtual
+    auto
+    forced_unpublish() -> void {}
+
+    virtual
+    auto
+    maybe_publish() -> void {}
 };
 
 } // namespace node

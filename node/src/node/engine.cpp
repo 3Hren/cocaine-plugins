@@ -1,5 +1,7 @@
 #include "engine.hpp"
 
+#include <boost/algorithm/cxx11/all_of.hpp>
+
 #include <boost/range/adaptors.hpp>
 #include <boost/range/algorithm.hpp>
 #include <boost/range/numeric.hpp>
@@ -45,6 +47,7 @@ namespace service {
 namespace node {
 
 namespace ph = std::placeholders;
+
 
 engine_t::engine_t(context_t& context,
                    manifest_t manifest,
@@ -171,6 +174,27 @@ auto engine_t::control_population(boost::optional<std::size_t> count) -> void {
     }
 
     pool_target.apply([&](boost::optional<std::size_t>& pool_target) {
+        if (pool_target == count) {
+            COCAINE_LOG_DEBUG(log, "pool target wasn't updated, skipping (re)publish step");
+            return;
+        }
+
+        const auto zero = std::size_t{0};
+
+        if (pool_target == zero) {
+            observers.apply([] (const observers_type& observers) {
+                for (const auto& o : observers) {
+                    o->maybe_publish();
+                }
+            });
+        } else if (count == zero) {
+            observers.apply([] (const observers_type& observers) {
+                for (const auto& o : observers) {
+                    o->forced_unpublish();
+                }
+            });
+        }
+
         pool_target = count;
     });
 
@@ -296,6 +320,7 @@ auto engine_t::cancel() -> void {
     this->control_population(boost::none);
     this->pool->clear();
     this->on_spawn_rate_timer->reset();
+    this->on_postmortem_timer->reset();
     this->observers->clear();
 }
 
@@ -539,7 +564,7 @@ auto engine_t::rebalance_events(pool_type& pool, queue_type& queue) -> void {
         return;
     }
 
-    COCAINE_LOG_DEBUG(log, "rebalancing events queue");
+    COCAINE_LOG_DEBUG(log, "rebalancing events queue of size {}", queue.size());
     while (!queue.empty()) {
         auto& load = queue.front();
         COCAINE_LOG_DEBUG(log, "rebalancing event");
@@ -613,6 +638,18 @@ auto engine_t::rebalance_slaves() -> void {
                 {"target", target},
             });
 
+            if (*on_postmortem_timer.synchronize() && target == 0) {
+                COCAINE_LOG_DEBUG(log, "postmortem sequence is already in progress");
+                return;
+            }
+
+            on_postmortem_timer->reset();
+
+            if (target == 0) {
+                // special case: order to 'stop' application from Orchestrator.
+                return start_postmortem_sequence(pool);
+            }
+
             if (target <= pool.size()) {
                 std::size_t active = boost::count_if(pool | boost::adaptors::map_values, +[](const slave_t& slave) -> bool {
                     return slave.active();
@@ -650,6 +687,8 @@ auto engine_t::rebalance_slaves() -> void {
                 {"target", target},
             });
 
+            on_postmortem_timer->reset();
+
             if (pool.size() >= profile.pool_limit) {
                 return;
             }
@@ -658,6 +697,53 @@ auto engine_t::rebalance_slaves() -> void {
                 spawn(pool);
             }
         }
+    });
+}
+
+auto engine_t::stopped_by_control() const -> bool {
+    return static_cast<bool>(*on_postmortem_timer.synchronize());
+}
+
+//
+// Note that there is lock holded for pool_ref already
+//
+auto engine_t::start_postmortem_sequence(pool_type& pool_ref) -> void {
+    COCAINE_LOG_DEBUG(log, "starting postmortem sequence for {} worker(s), queue size {}",
+        pool_ref.size(), queue->size());
+
+    const auto all_done = boost::algorithm::all_of(pool_ref, [] (const pool_type::value_type& el) {
+        return el.second.load() == 0;
+    });
+
+    if (queue->empty() && all_done) {
+        pool_ref.clear();
+        COCAINE_LOG_DEBUG(log, "postmortem sequence done, queue is empty, all workers in idle state");
+        return;
+    }
+
+    on_postmortem_timer.apply([=] (std::unique_ptr<asio::deadline_timer>& timer) {
+        timer = std::make_unique<asio::deadline_timer>(*loop);
+
+        const auto timeout = profile_.synchronize()->timeout.death;
+        COCAINE_LOG_DEBUG(log, "preparing postmortem sequence with completion {} ms timeout", timeout);
+
+        const auto self = shared_from_this();
+        timer->expires_from_now(boost::posix_time::milliseconds(timeout));
+        timer->async_wait([this, self] (const std::error_code& ec) {
+            if (ec) {
+                COCAINE_LOG_DEBUG(log, "postmortem completion timer was cancelled: {}", ec.message());
+                return;
+            }
+
+            const auto queue_size = queue->size();
+            const auto pool_size = pool->size();
+
+            queue->clear();
+            pool->clear();
+
+            COCAINE_LOG_DEBUG(log, "postmortem sequence completed, {} released, {} events dropped",
+                pool_size, queue_size);
+        });
     });
 }
 

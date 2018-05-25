@@ -64,6 +64,8 @@ public:
     synchronized<pool_type> pool;
     synchronized<boost::optional<std::size_t>> pool_target;
     synchronized<std::unique_ptr<asio::deadline_timer>> on_spawn_rate_timer;
+    synchronized<std::unique_ptr<asio::deadline_timer>> on_postmortem_timer;
+
     std::chrono::system_clock::time_point last_failed;
     std::chrono::seconds last_timeout;
 
@@ -170,6 +172,8 @@ public:
     // currently unused, defined for symmetry.
     auto start_isolate_metrics_poll() -> void;
     auto stop_isolate_metrics_poll() -> void;
+
+    auto stopped_by_control() const -> bool;
 private:
     /// Spawns a slave using current manifest and profile.
     auto spawn(pool_type& pool) -> void;
@@ -202,6 +206,8 @@ private:
     auto rebalance_slaves() -> void;
 
     auto on_spawn_rate_timeout(const std::error_code& ec) -> void;
+
+    auto start_postmortem_sequence(pool_type&) -> void;
 };
 
 }  // namespace node

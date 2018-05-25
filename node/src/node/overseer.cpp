@@ -78,6 +78,10 @@ auto overseer_t::prototype() -> std::unique_ptr<io::basic_dispatch_t> {
     return engine->prototype();
 }
 
+auto overseer_t::stopped_by_control() const -> bool {
+    return engine->stopped_by_control();
+}
+
 }  // namespace node
 }  // namespace service
 }  // namespace cocaine

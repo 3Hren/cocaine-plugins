@@ -197,7 +197,8 @@ private:
         typedef io::protocol<io::event_traits<io::app::enqueue>::dispatch_type>::scope protocol;
 
         try {
-            if (auto overseer = this->overseer.lock()) {
+            auto overseer = this->overseer.lock();
+            if (overseer && !overseer->o->stopped_by_control()) {
                 return overseer->o->enqueue({event, hpack::headers_t(headers)}, upstream);
             } else {
                 // We shouldn't close the connection here, because there possibly can be events
@@ -481,6 +482,18 @@ private:
 
         auto spawned(const std::string&) -> void override {
             parent.spawned();
+        }
+
+        auto forced_unpublish() -> void override {
+            parent.unpublish();
+        }
+
+        auto maybe_publish() -> void override {
+            try {
+                parent.maybe_publish();
+            } catch (const std::exception&) {
+                // pass; see comments for parent::spawned(...) exception handler
+            }
         }
 
     private:
