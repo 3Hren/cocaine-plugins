@@ -115,7 +115,7 @@ private:
 
     std::unique_ptr<metrics_t> metrics;
 
-    typedef metrics::usts::ewma_t ewma_type;
+    typedef metrics::usts::ewma<std::chrono::steady_clock> ewma_type;
 
     struct {
         std::unique_ptr<ewma_type> load;

@@ -30,7 +30,8 @@ struct queue_t {
     unsigned long capacity;
 
     const synchronized<queue_type>* queue;
-    metrics::usts::ewma_t& queue_depth;
+    using ewma_type = metrics::usts::ewma<std::chrono::steady_clock>;
+    ewma_type& queue_depth;
 };
 
 // Helper tagged struct.

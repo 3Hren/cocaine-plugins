@@ -34,12 +34,12 @@ stats_t::stats_t(context_t& context, const std::string& name, std::chrono::high_
         metrics_hub.counter<std::int64_t>(cocaine::format(name_slaves_crashed, name))
     },
     meter(metrics_hub.meter(cocaine::format(name_rate, name))),
-    queue_depth(std::make_shared<metrics::usts::ewma_t>(interval)),
+    queue_depth(std::make_shared<ewma_type>(interval)),
     queue_depth_gauge(metrics_hub
         .register_gauge<double>(
             cocaine::format(name_queue_depth_average, name),
             {},
-            std::bind(&metrics::usts::ewma_t::get, queue_depth)
+            std::bind(&ewma_type::get, queue_depth)
         )
     ),
     timer(metrics_hub.timer<metrics::accumulator::decaying::exponentially_t>(cocaine::format(name_timings, name)))

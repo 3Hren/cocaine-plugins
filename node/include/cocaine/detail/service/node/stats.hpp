@@ -35,7 +35,8 @@ struct stats_t {
 
     /// EWMA rates.
     metrics::shared_metric<metrics::meter_t> meter;
-    std::shared_ptr<metrics::usts::ewma_t> queue_depth;
+    using ewma_type = metrics::usts::ewma<std::chrono::steady_clock>;
+    std::shared_ptr<ewma_type> queue_depth;
     metrics::shared_metric<metrics::gauge<double>> queue_depth_gauge;
 
     /// Channel processing time quantiles (summary).
