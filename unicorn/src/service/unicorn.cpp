@@ -222,7 +222,8 @@ struct method_of {
         boost::mpl::pair<io::unicorn::remove, decltype(&api::v15::unicorn_t::del)>,
         boost::mpl::pair<io::unicorn::increment, decltype(&api::v15::unicorn_t::increment)>,
         boost::mpl::pair<io::unicorn::lock, decltype(&api::v15::unicorn_t::lock)>,
-        boost::mpl::pair<io::unicorn::named_lock, decltype(&api::v15::unicorn_t::named_lock)>
+        boost::mpl::pair<io::unicorn::named_lock, decltype(&api::v15::unicorn_t::named_lock)>,
+        boost::mpl::pair<io::unicorn::create_with, decltype(&api::v15::unicorn_t::create_with)>
     >::type mapping;
 
     typedef typename boost::mpl::at<mapping, Event>::type type;
@@ -281,6 +282,7 @@ unicorn_service_t::unicorn_service_t(context_t& context, asio::io_service& asio_
     r.on<scope::increment>(&api::v15::unicorn_t::increment);
     r.on<scope::lock>(&api::v15::unicorn_t::lock);
     r.on<scope::named_lock>(&api::v15::unicorn_t::named_lock);
+    r.on<scope::create_with>(&api::v15::unicorn_t::create_with);
 }
 
 unicorn_dispatch_t::unicorn_dispatch_t(const std::string& name_) :

@@ -69,6 +69,37 @@ struct unicorn {
         typedef unicorn_final_tag dispatch_type;
     };
 
+    struct create_with {
+        typedef unicorn_tag tag;
+
+        static const char* alias() {
+            return "create_with";
+        }
+
+        /**
+        * Create a node if it does not exist.
+        *
+        * path_t - path to change.
+        * value_t - value to write in path
+        * dynamic_t - additional options
+        **/
+        typedef boost::mpl::list<
+            cocaine::unicorn::path_t,
+            cocaine::unicorn::value_t,
+            cocaine::dynamic_t
+        > argument_type;
+
+        /**
+        * true if node was created. Error on any kind of error
+        */
+        typedef option_of<
+            bool
+        >::tag upstream_type;
+
+        typedef unicorn_final_tag dispatch_type;
+    };
+
+
     struct put {
         typedef unicorn_tag tag;
 
@@ -299,7 +330,8 @@ struct protocol<unicorn_tag> {
         unicorn::remove,
         unicorn::increment,
         unicorn::lock,
-        unicorn::named_lock
+        unicorn::named_lock,
+        unicorn::create_with
     > messages;
 
     typedef unicorn scope;
