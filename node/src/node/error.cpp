@@ -35,6 +35,12 @@ struct node_category_t:
             return "uncaught error while spooling app";
         case node_errors::uncaught_publish_error:
             return "uncaught error while publishing app";
+        case node_errors::inactive_on_spool:
+            return "inactive in spooling state";
+        case node_errors::inactive_on_stop:
+            return "inactive in stopped state";
+        case node_errors::inactive_on_broken:
+            return "inactive in broken state";
         default:
             break;
         }

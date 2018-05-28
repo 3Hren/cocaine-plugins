@@ -273,7 +273,12 @@ enum node_errors {
     /// The isolate plugin has failed its contract and has thrown non `system_error` exception.
     /// Checking logs may help to determine what was happened.
     uncaught_spool_error,
-    uncaught_publish_error
+    uncaught_publish_error,
+
+    /// Used to signal clinet that app is not ready for `control` command.
+    inactive_on_spool,
+    inactive_on_stop,
+    inactive_on_broken
 };
 
 const std::error_category&

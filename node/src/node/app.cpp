@@ -283,6 +283,16 @@ public:
 
         return info;
     }
+
+    virtual
+    std::shared_ptr<overseer_t>
+    overseer() const override {
+        if (ec) {
+            throw std::system_error(error::inactive_on_broken, cocaine::format("app in broken state: '{}'", ec.message()));
+        }
+
+        throw std::system_error(error::inactive_on_stop, "app is stopped");
+    }
 };
 
 /// The application is currently spooling.
@@ -335,6 +345,12 @@ public:
         dynamic_t::object_t info;
         info["state"] = "spooling";
         return info;
+    }
+
+    virtual
+    std::shared_ptr<overseer_t>
+    overseer() const override {
+        throw std::system_error(error::inactive_on_spool, "app is spooling");
     }
 };
 
