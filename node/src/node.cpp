@@ -447,10 +447,8 @@ node_t::start_app(const std::string& name, const std::string& profile, callback_
 }
 
 auto
-node_t::pause_app(const std::string& name) -> deferred<void> {
+node_t::pause_app(const std::string& name) -> void {
     COCAINE_LOG_DEBUG(log, "processing `pause_app` request, app: '{}'", name);
-
-    auto d = deferred<void>();
 
     apps.apply([&](std::map<std::string, std::shared_ptr<node::app_t>>& apps) {
         auto it = apps.find(name);
@@ -462,16 +460,8 @@ node_t::pause_app(const std::string& name) -> deferred<void> {
 
         auto app = it->second;
         apps.erase(it);
-
-        // NOTE: we rely that app is being moved out here,
-        // so the dtor of app will take place strictly in the other thread.
-        std::async(std::launch::async, [](std::shared_ptr<node::app_t> app, deferred<void> d) {
-            app.reset();
-            d.close();
-        }, std::move(app), d);
+        return std::move(app);
     });
-
-    return d;
 }
 
 auto
