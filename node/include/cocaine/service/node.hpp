@@ -50,9 +50,6 @@ private:
     // Started applications.
     synchronized<std::map<std::string, std::shared_ptr<node::app_t>>> apps;
 
-    // Slot for context signals.
-    std::shared_ptr<dispatch<io::context_tag>> signal;
-
 public:
     node_t(context_t& context, asio::io_service& loop, const std::string& name, const dynamic_t& args);
     ~node_t();
@@ -74,8 +71,6 @@ public:
 private:
     auto
     start_app(const std::string& name, const std::string& profile) -> deferred<void>;
-
-    auto on_context_shutdown() -> void;
 };
 
 }  // namespace service

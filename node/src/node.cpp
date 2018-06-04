@@ -26,7 +26,6 @@
 #include <cocaine/api/authorization/event.hpp>
 #include <cocaine/api/storage.hpp>
 #include <cocaine/context.hpp>
-#include <cocaine/context/signal.hpp>
 #include <cocaine/format/vector.hpp>
 #include <cocaine/logging.hpp>
 #include <cocaine/middleware/auth.hpp>
@@ -337,14 +336,9 @@ node_t::node_t(context_t& context, asio::io_service& asio, const std::string& na
         }
     );
 
-    // Context signal/slot.
-    signal = std::make_shared<dispatch<io::context_tag>>(name);
-    signal->on<io::context::shutdown>(std::bind(&node_t::on_context_shutdown, this));
-
     const auto runname = args.as_object().at("runlist", "").as_string();
 
     if(runname.empty()) {
-        context.signal_hub().listen(signal, asio);
         return;
     }
 
@@ -363,7 +357,6 @@ node_t::node_t(context_t& context, asio::io_service& asio, const std::string& na
     }
 
     if(runlist.empty()) {
-        context.signal_hub().listen(signal, asio);
         return;
     }
 
@@ -388,26 +381,15 @@ node_t::node_t(context_t& context, asio::io_service& asio, const std::string& na
     if(!errored.empty()) {
         COCAINE_LOG_WARNING(log, "couldn't start {} app(s): {}", errored.size(), boost::join(errored, ", "));
     }
-
-    context.signal_hub().listen(signal, asio);
 }
 
-node_t::~node_t() = default;
+node_t::~node_t() {
+    COCAINE_LOG_DEBUG(log, "shutting down apps");
+}
 
 auto
 node_t::prototype() -> io::basic_dispatch_t&{
     return *this;
-}
-
-void
-node_t::on_context_shutdown() {
-    // TODO: In fact this method may not be invoked during context shutdown - race - node service
-    // can be terminated earlier than this completion handler be invoked.
-    COCAINE_LOG_DEBUG(log, "shutting down apps");
-
-    apps->clear();
-
-    signal = nullptr;
 }
 
 auto
